@@ -9,10 +9,10 @@ from typing import TextIO
 
 
 class SQLiteStore:
-    def __init__(self, path: str | Path):
+    def __init__(self, path: str | Path, *, check_same_thread: bool = True):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._connection = sqlite3.connect(self.path)
+        self._connection = sqlite3.connect(self.path, check_same_thread=check_same_thread)
         self._connection.row_factory = sqlite3.Row
         self._create_schema()
 

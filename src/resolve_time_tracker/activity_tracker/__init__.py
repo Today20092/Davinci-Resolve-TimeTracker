@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import os
 from dataclasses import dataclass
 from ctypes import wintypes
 from typing import Protocol
@@ -102,6 +103,14 @@ class LASTINPUTINFO(ctypes.Structure):
     _fields_ = [("cbSize", wintypes.UINT), ("dwTime", wintypes.DWORD)]
 
 
+class AlwaysActiveProbe:
+    def idle_seconds(self) -> float | None:
+        return None
+
+    def resolve_is_foreground(self) -> bool:
+        return True
+
+
 class WindowsActivityProbe:
     def idle_seconds(self) -> float | None:
         last_input = LASTINPUTINFO()
@@ -120,3 +129,9 @@ class WindowsActivityProbe:
 
     def resolve_is_foreground(self) -> bool:
         return "DaVinci Resolve" in self.foreground_window_title()
+
+
+def default_activity_probe() -> WindowsActivityProbe | AlwaysActiveProbe:
+    if os.name == "nt":
+        return WindowsActivityProbe()
+    return AlwaysActiveProbe()

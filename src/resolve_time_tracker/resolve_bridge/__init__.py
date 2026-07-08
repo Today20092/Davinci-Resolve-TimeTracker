@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from resolve_time_tracker.activity_tracker import RuntimeSnapshot, WindowsActivityProbe
+from resolve_time_tracker.activity_tracker import RuntimeSnapshot, default_activity_probe
 
 
 SCRIPTING_ROOT = Path(
@@ -24,10 +24,12 @@ class ResolveBridge:
     def __init__(
         self,
         module_path: str | Path = MODULE_PATH,
-        activity_probe: WindowsActivityProbe | None = None,
+        activity_probe: Any | None = None,
+        resolve_object: Any | None = None,
     ):
         self.module_path = Path(module_path)
-        self.activity_probe = activity_probe or WindowsActivityProbe()
+        self.activity_probe = activity_probe or default_activity_probe()
+        self._resolve_object = resolve_object
         self._module: Any | None = None
 
     def snapshot(self) -> RuntimeSnapshot:
@@ -62,6 +64,8 @@ class ResolveBridge:
         )
 
     def resolve(self) -> Any:
+        if self._resolve_object is not None:
+            return self._resolve_object
         module = self._load_module()
         resolve = module.scriptapp("Resolve")
         if not resolve:
