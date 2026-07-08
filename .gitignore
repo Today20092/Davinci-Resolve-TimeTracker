@@ -19,7 +19,6 @@ exports/
 # Local agent/planning state
 .agents/
 .scratch/
-docs/agents/
 skills-lock.json
 
 # OS/editor

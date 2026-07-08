@@ -21,7 +21,7 @@ A state where the user's inactivity has exceeded the configured idle timeout and
 _Avoid_: Away, inactive
 
 **Session**:
-A contiguous time span attributed to one Resolve Project, Page, category, and billable state.
+A contiguous billable time span attributed to one Resolve Project, Page, and activity category.
 _Avoid_: Entry, log row
 
 **Heartbeat**:
