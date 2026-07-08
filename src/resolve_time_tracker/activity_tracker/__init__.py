@@ -39,6 +39,7 @@ class RuntimeTracker:
         self.idle_timeout_seconds = idle_timeout_seconds
         self.snapshot_provider = snapshot_provider
         self._previous: RuntimeSnapshot | None = None
+        self._previous_idle: bool | None = None
 
     @property
     def previous_snapshot(self) -> RuntimeSnapshot | None:
@@ -52,11 +53,7 @@ class RuntimeTracker:
             snapshot.idle_seconds is not None
             and snapshot.idle_seconds >= self.idle_timeout_seconds
         )
-        idle_before = (
-            previous is not None
-            and previous.idle_seconds is not None
-            and previous.idle_seconds >= self.idle_timeout_seconds
-        )
+        idle_before = self._previous_idle
 
         if previous is None or idle_now != idle_before:
             if idle_now:
@@ -87,6 +84,7 @@ class RuntimeTracker:
 
         self.engine.heartbeat_tick(observed_at)
         self._previous = snapshot
+        self._previous_idle = idle_now
         return snapshot
 
 

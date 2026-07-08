@@ -76,6 +76,52 @@ class RuntimeTrackingTest(unittest.TestCase):
 
         self.assertEqual("2026-01-02T10:01:00Z", active["last_heartbeat_at_utc"])
 
+    def test_lowered_idle_timeout_closes_active_session_on_next_poll(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with SQLiteStore(Path(tmp) / "tracker.sqlite3") as store:
+                tracker = RuntimeTracker(
+                    SessionEngine(store),
+                    idle_timeout_seconds=300,
+                    snapshot_provider=SequenceSnapshotProvider(
+                        [
+                            RuntimeSnapshot("Project A", "edit", False, 100, True),
+                            RuntimeSnapshot("Project A", "edit", False, 110, True),
+                        ]
+                    ),
+                )
+
+                tracker.poll(utc(11))
+                tracker.idle_timeout_seconds = 60
+                tracker.poll(utc(11, 1))
+
+                rows = store.sessions()
+                active = store.active_session()
+
+        self.assertEqual("2026-01-02T11:01:00Z", rows[0]["ended_at_utc"])
+        self.assertIsNone(active)
+
+    def test_raised_idle_timeout_resumes_tracking_on_next_poll(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with SQLiteStore(Path(tmp) / "tracker.sqlite3") as store:
+                tracker = RuntimeTracker(
+                    SessionEngine(store),
+                    idle_timeout_seconds=60,
+                    snapshot_provider=SequenceSnapshotProvider(
+                        [
+                            RuntimeSnapshot("Project A", "edit", False, 100, True),
+                            RuntimeSnapshot("Project A", "edit", False, 110, True),
+                        ]
+                    ),
+                )
+
+                tracker.poll(utc(12))
+                tracker.idle_timeout_seconds = 300
+                tracker.poll(utc(12, 1))
+
+                active = store.active_session()
+
+        self.assertEqual("2026-01-02T12:01:00Z", active["started_at_utc"])
+
     def test_resolve_bridge_snapshot_reads_safe_runtime_fields(self):
         bridge = ResolveBridge(activity_probe=FakeActivity())
         bridge._module = FakeResolveModule()

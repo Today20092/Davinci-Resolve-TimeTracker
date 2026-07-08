@@ -8,6 +8,7 @@ from resolve_time_tracker.session_engine import SessionEngine
 from resolve_time_tracker.activity_tracker import RuntimeSnapshot, RuntimeTracker, SequenceSnapshotProvider
 from resolve_time_tracker.ui import (
     _duration,
+    companion_instance_lock,
     close_runtime_once,
     poll_runtime_once,
     prepare_companion_store,
@@ -74,6 +75,18 @@ class UiStoreSupportTest(unittest.TestCase):
 
         self.assertEqual(1, len(rows))
         self.assertEqual("2026-01-02T10:00:00Z", rows[0]["ended_at_utc"])
+
+    def test_companion_instance_lock_blocks_second_launcher(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "tracker.sqlite3"
+
+            with companion_instance_lock(path):
+                with self.assertRaises(RuntimeError):
+                    with companion_instance_lock(path):
+                        pass
+
+            with companion_instance_lock(path):
+                pass
 
     def test_project_summaries_and_idle_timeout(self):
         with tempfile.TemporaryDirectory() as tmp:

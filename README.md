@@ -112,7 +112,7 @@ To install the Resolve menu launcher:
 uv run --python 3.13 scripts/install_resolve_menu.py
 ```
 
-Then run `Workspace > Scripts > Utility > ResolveTimeTrackerMenu` from Resolve. Set this environment variable if Python 3.13 is not discoverable:
+Then run `Workspace > Scripts > ResolveTimeTrackerMenu` from Resolve. Set this environment variable if Python 3.13 is not discoverable:
 
 ```powershell
 $env:RESOLVE_TIME_TRACKER_PYTHON="C:\path\to\python.exe"

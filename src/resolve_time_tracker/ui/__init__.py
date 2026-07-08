@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import datetime, timezone
+import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator, TextIO
 
 from resolve_time_tracker.activity_tracker import RuntimeTracker
 from resolve_time_tracker.database import SQLiteStore
@@ -356,14 +358,65 @@ class CompanionApp:
 
 
 def run_companion(db_path: str | Path) -> None:
-    with SQLiteStore(db_path) as store:
-        prepare_companion_store(store)
-        runtime_tracker = RuntimeTracker(
-            SessionEngine(store),
-            idle_timeout_seconds=store.idle_timeout_seconds(),
-            snapshot_provider=ResolveBridge(),
-        )
-        CompanionApp(store, runtime_tracker=runtime_tracker).run()
+    with companion_instance_lock(db_path):
+        with SQLiteStore(db_path) as store:
+            prepare_companion_store(store)
+            runtime_tracker = RuntimeTracker(
+                SessionEngine(store),
+                idle_timeout_seconds=store.idle_timeout_seconds(),
+                snapshot_provider=ResolveBridge(),
+            )
+            CompanionApp(store, runtime_tracker=runtime_tracker).run()
+
+
+def companion_lock_path(db_path: str | Path) -> Path:
+    return Path(db_path).with_suffix(".lock")
+
+
+@contextmanager
+def companion_instance_lock(db_path: str | Path) -> Iterator[None]:
+    lock_path = companion_lock_path(db_path)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_file = lock_path.open("a+", encoding="utf-8")
+    locked = False
+    try:
+        _lock_file(lock_file)
+        locked = True
+        yield
+    finally:
+        if locked:
+            _unlock_file(lock_file)
+        lock_file.close()
+
+
+def _lock_file(lock_file: TextIO) -> None:
+    lock_file.seek(0)
+    lock_file.write("1")
+    lock_file.flush()
+    lock_file.seek(0)
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as exc:
+        raise RuntimeError("Resolve Time Tracker is already running") from exc
+
+
+def _unlock_file(lock_file: TextIO) -> None:
+    lock_file.seek(0)
+    if os.name == "nt":
+        import msvcrt
+
+        msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+    else:
+        import fcntl
+
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
 def poll_runtime_once(
