@@ -40,6 +40,10 @@ class RuntimeTracker:
         self.snapshot_provider = snapshot_provider
         self._previous: RuntimeSnapshot | None = None
 
+    @property
+    def previous_snapshot(self) -> RuntimeSnapshot | None:
+        return self._previous
+
     def poll(self, observed_at) -> RuntimeSnapshot:
         snapshot = self.snapshot_provider.snapshot()
         previous = self._previous

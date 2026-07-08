@@ -106,10 +106,15 @@ Pass a different database path for testing:
 uv run --python 3.13 scripts/ResolveTimeTracker.py --db .\tracker.sqlite3
 ```
 
-To launch from Resolve, copy `scripts/ResolveTimeTrackerMenu.py` into Resolve's `Utility` scripts folder, then run it from Resolve's Workspace/Scripts menu. Set these environment variables if the script is not inside this repository or Python 3.13 is not discoverable:
+To install the Resolve menu launcher:
 
 ```powershell
-$env:RESOLVE_TIME_TRACKER_REPO="C:\path\to\Davinci-Resolve-TimeTracker"
+uv run --python 3.13 scripts/install_resolve_menu.py
+```
+
+Then run `Workspace > Scripts > Utility > ResolveTimeTrackerMenu` from Resolve. Set this environment variable if Python 3.13 is not discoverable:
+
+```powershell
 $env:RESOLVE_TIME_TRACKER_PYTHON="C:\path\to\python.exe"
 ```
 
@@ -121,6 +126,10 @@ The companion UI has four tabs:
 - Settings: idle timeout and read-only diagnostics.
 
 CSV export writes closed Sessions only. Open active Sessions are exported after they close.
+
+## Release Artifact
+
+The current Studio MVP release artifact is source usage docs plus the Resolve menu install helper. A packaged Windows app is deferred until the Studio launch path has had more real editing sessions against it.
 
 ## Current Status
 
