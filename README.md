@@ -39,7 +39,7 @@ Phase 1 builds the smallest useful tracker:
 - Session heartbeat and crash recovery
 - SQLite storage
 - CSV export
-- Basic Resolve-launched UI or companion flow that works with Resolve Free
+- Basic Resolve-launched companion UI. The current verified path is Resolve Studio 21.0.2.4 on Windows; Resolve Free compatibility still needs verification.
 
 ## Architecture
 
@@ -78,12 +78,58 @@ Resolve Time Tracker only tracks timing and activity state. It must never:
 - Inspect media contents
 - Send project data to a cloud service
 
+## Usage
+
+This project is Windows-first and currently verified against DaVinci Resolve Studio 21.0.2.4. Resolve Free is the target, but Free compatibility has not been verified yet.
+
+Install project dependencies:
+
+```powershell
+uv sync
+```
+
+Run the companion window directly:
+
+```powershell
+uv run --python 3.13 scripts/ResolveTimeTracker.py
+```
+
+The default SQLite data file is:
+
+```text
+%LOCALAPPDATA%\ResolveTimeTracker\tracker.sqlite3
+```
+
+Pass a different database path for testing:
+
+```powershell
+uv run --python 3.13 scripts/ResolveTimeTracker.py --db .\tracker.sqlite3
+```
+
+To launch from Resolve, copy `scripts/ResolveTimeTrackerMenu.py` into Resolve's `Utility` scripts folder, then run it from Resolve's Workspace/Scripts menu. Set these environment variables if the script is not inside this repository or Python 3.13 is not discoverable:
+
+```powershell
+$env:RESOLVE_TIME_TRACKER_REPO="C:\path\to\Davinci-Resolve-TimeTracker"
+$env:RESOLVE_TIME_TRACKER_PYTHON="C:\path\to\python.exe"
+```
+
+The companion UI has four tabs:
+
+- Dashboard: read-only Resolve connection, Project, Page, tracking state, active elapsed time, and last heartbeat.
+- Projects: discovered Resolve Project names and derived time totals.
+- Sessions: closed Sessions, edit controls for start/end/Page/activity, and CSV export.
+- Settings: idle timeout and read-only diagnostics.
+
+CSV export writes closed Sessions only. Open active Sessions are exported after they close.
+
 ## Current Status
 
-This repository is at planning and feasibility stage. Current research notes:
+This repository has the MVP core tracker, runtime polling boundary, and companion UI in progress. Current research notes:
 
 ```text
 docs/research/resolve-scripting-feasibility.md
+docs/research/windows-idle-detection-strategy.md
+docs/research/resolve-runtime-probe-results.md
 ```
 
 ## Development
@@ -92,11 +138,11 @@ This project targets Python because DaVinci Resolve exposes Python scripting.
 
 ```powershell
 uv sync
-uv run scripts/ResolveTimeTracker.py
+uv run --python 3.13 scripts/ResolveTimeTracker.py --version
 uv run -m unittest discover -s tests
 ```
 
-No runtime dependencies are required yet.
+No runtime dependencies are required beyond Python's standard library.
 
 ## License
 
