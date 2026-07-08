@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Virtual environments
+.venv/
+venv/
+
+# Local data
+*.db
+*.sqlite
+*.sqlite3
+exports/
+
+# Local agent/planning state
+.agents/
+.scratch/
+docs/agents/
+skills-lock.json
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

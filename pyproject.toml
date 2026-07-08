@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "resolve-time-tracker"
+version = "0.1.0"
+description = "MIT open-source time tracker for DaVinci Resolve Free."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+  { name = "Resolve Time Tracker contributors" }
+]
+keywords = ["davinci-resolve", "time-tracking", "sqlite", "csv", "video-editing"]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Programming Language :: Python :: 3",
+  "Topic :: Multimedia :: Video",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
