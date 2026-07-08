@@ -6,8 +6,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from resolve_time_tracker.activity_tracker import RuntimeTracker
 from resolve_time_tracker.database import SQLiteStore
 from resolve_time_tracker.exporter import export_sessions_csv
+from resolve_time_tracker.resolve_bridge import ResolveBridge
+from resolve_time_tracker.session_engine import SessionEngine
 
 
 class StoreStatusProvider:
@@ -45,6 +48,8 @@ class CompanionApp:
         *,
         root: Any | None = None,
         status_provider: StoreStatusProvider | None = None,
+        runtime_tracker: RuntimeTracker | None = None,
+        poll_interval_ms: int = 5000,
     ):
         import tkinter as tk
         from tkinter import ttk
@@ -53,6 +58,9 @@ class CompanionApp:
         self.ttk = ttk
         self.store = store
         self.status_provider = status_provider or StoreStatusProvider(store)
+        self.runtime_tracker = runtime_tracker
+        self.poll_interval_ms = poll_interval_ms
+        self.last_runtime_error: str | None = None
         self.root = root or tk.Tk()
         self.root.title("Resolve Time Tracker")
         self.root.geometry("900x560")
@@ -61,6 +69,9 @@ class CompanionApp:
 
         self._build()
         self.refresh()
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+        if self.runtime_tracker is not None:
+            self.root.after(100, self._poll_runtime)
 
     def run(self) -> None:
         self.root.mainloop()
@@ -80,6 +91,7 @@ class CompanionApp:
 
         status = ttk.Frame(outer)
         status.pack(fill="x", pady=(0, 10))
+        ttk.Button(status, text="Refresh", command=self.refresh).pack(side="right")
         for label, key in [
             ("Resolve", "connection"),
             ("Project", "project"),
@@ -89,11 +101,10 @@ class CompanionApp:
         ]:
             self.status_vars[key] = self.tk.StringVar(value="-")
             ttk.Label(status, text=f"{label}:").pack(side="left")
-            ttk.Label(status, textvariable=self.status_vars[key], width=18).pack(
+            ttk.Label(status, textvariable=self.status_vars[key], width=14).pack(
                 side="left",
                 padx=(2, 12),
             )
-        ttk.Button(status, text="Refresh", command=self.refresh).pack(side="right")
 
         self.tabs = ttk.Notebook(outer)
         self.tabs.pack(fill="both", expand=True)
@@ -201,6 +212,14 @@ class CompanionApp:
 
     def _refresh_status(self) -> None:
         status = self.status_provider.status()
+        if self.runtime_tracker is not None and self.runtime_tracker.previous_snapshot is not None:
+            snapshot = self.runtime_tracker.previous_snapshot
+            status["connection"] = "connected"
+            status["project"] = snapshot.project_name or "none"
+            status["page"] = snapshot.page or "none"
+        if self.last_runtime_error:
+            status["connection"] = "error"
+            status["heartbeat"] = self.last_runtime_error
         for key, value in status.items():
             if key in self.status_vars:
                 self.status_vars[key].set(value)
@@ -319,10 +338,49 @@ class CompanionApp:
             return
         self.refresh()
 
+    def _poll_runtime(self) -> None:
+        if self.runtime_tracker is None:
+            return
+        try:
+            poll_runtime_once(self.store, self.runtime_tracker, datetime.now(timezone.utc))
+            self.last_runtime_error = None
+        except Exception as exc:
+            self.last_runtime_error = f"{type(exc).__name__}: {exc}"
+        self.refresh()
+        self.root.after(self.poll_interval_ms, self._poll_runtime)
+
+    def _on_close(self) -> None:
+        if self.runtime_tracker is not None:
+            close_runtime_once(self.runtime_tracker, datetime.now(timezone.utc))
+        self.root.destroy()
+
 
 def run_companion(db_path: str | Path) -> None:
     with SQLiteStore(db_path) as store:
-        CompanionApp(store).run()
+        prepare_companion_store(store)
+        runtime_tracker = RuntimeTracker(
+            SessionEngine(store),
+            idle_timeout_seconds=store.idle_timeout_seconds(),
+            snapshot_provider=ResolveBridge(),
+        )
+        CompanionApp(store, runtime_tracker=runtime_tracker).run()
+
+
+def poll_runtime_once(
+    store: SQLiteStore,
+    runtime_tracker: RuntimeTracker,
+    observed_at: datetime,
+) -> None:
+    runtime_tracker.idle_timeout_seconds = store.idle_timeout_seconds()
+    runtime_tracker.poll(observed_at)
+
+
+def prepare_companion_store(store: SQLiteStore) -> None:
+    store.recover_active_session()
+
+
+def close_runtime_once(runtime_tracker: RuntimeTracker, observed_at: datetime) -> None:
+    runtime_tracker.engine.resolve_closed(observed_at)
 
 
 def _parse_utc(value: str) -> datetime:

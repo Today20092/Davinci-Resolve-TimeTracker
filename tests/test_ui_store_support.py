@@ -5,7 +5,13 @@ from pathlib import Path
 
 from resolve_time_tracker.database import SQLiteStore
 from resolve_time_tracker.session_engine import SessionEngine
-from resolve_time_tracker.ui import _duration
+from resolve_time_tracker.activity_tracker import RuntimeSnapshot, RuntimeTracker, SequenceSnapshotProvider
+from resolve_time_tracker.ui import (
+    _duration,
+    close_runtime_once,
+    poll_runtime_once,
+    prepare_companion_store,
+)
 
 
 def utc(hour: int, minute: int = 0) -> datetime:
@@ -15,6 +21,59 @@ def utc(hour: int, minute: int = 0) -> datetime:
 class UiStoreSupportTest(unittest.TestCase):
     def test_ui_module_imports_and_formats_duration(self):
         self.assertEqual("1:01:01", _duration(3661))
+
+    def test_poll_runtime_once_updates_sessions_from_runtime_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with SQLiteStore(Path(tmp) / "tracker.sqlite3") as store:
+                tracker = RuntimeTracker(
+                    SessionEngine(store),
+                    idle_timeout_seconds=300,
+                    snapshot_provider=SequenceSnapshotProvider(
+                        [RuntimeSnapshot("Project A", "edit", False, 0, True)]
+                    ),
+                )
+
+                poll_runtime_once(store, tracker, utc(9))
+
+                active = store.active_session_summary()
+
+        self.assertEqual("Project A", active["project_name"])
+        self.assertEqual("edit", active["page"])
+        self.assertEqual("Project A", tracker.previous_snapshot.project_name)
+
+    def test_companion_startup_recovers_previous_active_session(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "tracker.sqlite3"
+            with SQLiteStore(path) as store:
+                engine = SessionEngine(store)
+                engine.project_changed(utc(9), "Project A")
+                engine.heartbeat_tick(utc(9, 5))
+
+            with SQLiteStore(path) as store:
+                prepare_companion_store(store)
+                rows = store.sessions()
+
+        self.assertEqual(1, len(rows))
+        self.assertEqual("2026-01-02T09:05:00Z", rows[0]["ended_at_utc"])
+
+    def test_companion_close_closes_active_session(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with SQLiteStore(Path(tmp) / "tracker.sqlite3") as store:
+                tracker = RuntimeTracker(
+                    SessionEngine(store),
+                    idle_timeout_seconds=300,
+                    snapshot_provider=SequenceSnapshotProvider(
+                        [RuntimeSnapshot("Project A", "edit", False, 0, True)]
+                    ),
+                )
+                poll_runtime_once(store, tracker, utc(9))
+
+                close_runtime_once(tracker, utc(10))
+
+                rows = store.sessions()
+
+        self.assertEqual(1, len(rows))
+        self.assertEqual("2026-01-02T10:00:00Z", rows[0]["ended_at_utc"])
 
     def test_project_summaries_and_idle_timeout(self):
         with tempfile.TemporaryDirectory() as tmp:

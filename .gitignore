@@ -20,6 +20,7 @@ exports/
 .agents/
 .scratch/
 skills-lock.json
+.codex-remote-attachments/
 
 # OS/editor
 .DS_Store
