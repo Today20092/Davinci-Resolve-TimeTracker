@@ -134,6 +134,88 @@ class SQLiteStore:
             )
         )
 
+    def project_summaries(self) -> list[sqlite3.Row]:
+        return list(
+            self._connection.execute(
+                """
+                SELECT
+                  projects.resolve_name AS project_name,
+                  COUNT(sessions.id) AS session_count,
+                  COALESCE(SUM(
+                    strftime('%s', sessions.ended_at_utc) -
+                    strftime('%s', sessions.started_at_utc)
+                  ), 0) AS duration_seconds,
+                  MAX(substr(sessions.started_at_utc, 1, 10)) AS last_session_date
+                FROM projects
+                LEFT JOIN sessions ON sessions.project_id = projects.id
+                GROUP BY projects.id, projects.resolve_name
+                ORDER BY projects.resolve_name
+                """
+            )
+        )
+
+    def active_session_summary(self) -> sqlite3.Row | None:
+        return self._connection.execute(
+            """
+            SELECT
+              active_session.id,
+              projects.resolve_name AS project_name,
+              active_session.started_at_utc,
+              active_session.last_heartbeat_at_utc,
+              active_session.page,
+              active_session.activity_category
+            FROM active_session
+            JOIN projects ON projects.id = active_session.project_id
+            WHERE active_session.id = 1
+            """
+        ).fetchone()
+
+    def update_session(
+        self,
+        session_id: int,
+        *,
+        started_at: datetime,
+        ended_at: datetime,
+        page: str,
+        activity_category: str,
+    ) -> None:
+        if activity_category not in {"editing", "playback", "rendering"}:
+            raise ValueError("activity_category must be editing, playback, or rendering")
+        started = _format_utc(started_at)
+        ended = _format_utc(ended_at)
+        if ended < started:
+            raise ValueError("ended_at must be greater than or equal to started_at")
+        with self._connection:
+            cursor = self._connection.execute(
+                """
+                UPDATE sessions
+                SET started_at_utc = ?, ended_at_utc = ?, page = ?, activity_category = ?
+                WHERE id = ?
+                """,
+                (started, ended, page or "Unknown", activity_category, session_id),
+            )
+            if cursor.rowcount == 0:
+                raise ValueError(f"Session {session_id} does not exist")
+
+    def idle_timeout_seconds(self) -> int:
+        row = self._connection.execute(
+            "SELECT idle_timeout_seconds FROM settings WHERE id = 1",
+        ).fetchone()
+        return int(row["idle_timeout_seconds"])
+
+    def set_idle_timeout_seconds(self, seconds: int) -> None:
+        if seconds <= 0:
+            raise ValueError("idle timeout must be positive")
+        with self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO settings(id, idle_timeout_seconds)
+                VALUES (1, ?)
+                ON CONFLICT(id) DO UPDATE SET idle_timeout_seconds = excluded.idle_timeout_seconds
+                """,
+                (seconds,),
+            )
+
     def write_csv(self, output: TextIO) -> None:
         import csv
 
