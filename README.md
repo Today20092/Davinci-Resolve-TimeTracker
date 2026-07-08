@@ -1,6 +1,6 @@
 # Resolve Time Tracker
 
-Resolve Time Tracker is an MIT-licensed, open-source time tracker for DaVinci Resolve Free. It is designed to track billable editing time per Resolve project while avoiding the classic mistake: counting time after the editor has walked away.
+Resolve Time Tracker is an MIT-licensed, open-source time tracker for DaVinci Resolve Studio. It is designed to track billable editing time per Resolve project while avoiding the classic mistake: counting time after the editor has walked away.
 
 The project is inspired by Jamie Fenn's DaVinci Resolve time tracker concept and launch video:
 
@@ -11,7 +11,7 @@ This is an independent open-source implementation. It is not affiliated with, en
 
 ## Goals
 
-- Work with DaVinci Resolve Free.
+- Work with DaVinci Resolve Studio first. Resolve Free compatibility is a post-MVP goal.
 - Track active editing time by Resolve project.
 - Pause tracking when the user is idle or Resolve is unfocused.
 - Continue tracking during render/export.
@@ -39,7 +39,7 @@ Phase 1 builds the smallest useful tracker:
 - Session heartbeat and crash recovery
 - SQLite storage
 - CSV export
-- Basic Resolve-launched companion UI. The current verified path is Resolve Studio 21.0.2.4 on Windows; Resolve Free compatibility still needs verification.
+- Basic Resolve-launched companion UI. The current verified path is Resolve Studio 21.0.2.4 on Windows; Resolve Free compatibility is tracked separately after the Studio MVP.
 
 ## Architecture
 
@@ -80,7 +80,7 @@ Resolve Time Tracker only tracks timing and activity state. It must never:
 
 ## Usage
 
-This project is Windows-first and currently verified against DaVinci Resolve Studio 21.0.2.4. Resolve Free is the target, but Free compatibility has not been verified yet.
+This project is Windows-first and currently verified against DaVinci Resolve Studio 21.0.2.4. Resolve Free compatibility is deferred to post-MVP work.
 
 Install project dependencies:
 
