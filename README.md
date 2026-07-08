@@ -47,14 +47,12 @@ The code is organized around a Session Engine. Platform-specific pieces stay beh
 
 ```text
 src/resolve_time_tracker/
-  resolve_bridge/      Resolve scripting API boundary
-  activity_tracker/    Focus, idle, playback, and render activity signals
-  session_engine/      Event-to-session state machine
-  database/            SQLite schema and persistence
-  exporter/            CSV export
-  settings/            User settings
-  resolve_ui/          Resolve UIManager window
-  ui/                  Legacy Tkinter companion surface
+  resolve_bridge.py    Resolve scripting API boundary
+  activity_tracker.py  Focus, idle, playback, and render activity signals
+  session_engine.py    Event-to-session state machine
+  database.py          SQLite schema and persistence
+  resolve_ui.py        Resolve UIManager window
+  ui.py                Legacy Tkinter companion surface
 ```
 
 Core events:

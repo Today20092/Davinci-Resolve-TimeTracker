@@ -57,7 +57,7 @@ from pathlib import Path
 REPO_ROOT = Path(r"{repo_root}")
 os.environ["RESOLVE_TIME_TRACKER_REPO"] = str(REPO_ROOT)
 runpy.run_path(
-    str(REPO_ROOT / "scripts" / "ResolveTimeTrackerMenu.py"),
+    str(REPO_ROOT / "scripts" / "ResolveTimeTracker.py"),
     run_name="__main__",
     init_globals={{
         "resolve": globals().get("resolve"),

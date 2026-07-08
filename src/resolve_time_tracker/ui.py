@@ -10,37 +10,8 @@ from typing import Any, Iterator, TextIO
 
 from resolve_time_tracker.activity_tracker import RuntimeTracker
 from resolve_time_tracker.database import SQLiteStore
-from resolve_time_tracker.exporter import export_sessions_csv
 from resolve_time_tracker.resolve_bridge import ResolveBridge
 from resolve_time_tracker.session_engine import SessionEngine
-
-
-class StoreStatusProvider:
-    def __init__(self, store: SQLiteStore):
-        self.store = store
-
-    def status(self) -> dict[str, str]:
-        active = self.store.active_session_summary()
-        if active is None:
-            return {
-                "connection": "connected",
-                "project": "none",
-                "page": "none",
-                "state": "paused",
-                "active_elapsed": "0:00:00",
-                "heartbeat": "none",
-            }
-
-        started = _parse_utc(active["started_at_utc"])
-        elapsed = max(0, int((datetime.now(timezone.utc) - started).total_seconds()))
-        return {
-            "connection": "connected",
-            "project": active["project_name"],
-            "page": active["page"],
-            "state": active["activity_category"],
-            "active_elapsed": _duration(elapsed),
-            "heartbeat": active["last_heartbeat_at_utc"] or "none",
-        }
 
 
 class CompanionApp:
@@ -49,7 +20,6 @@ class CompanionApp:
         store: SQLiteStore,
         *,
         root: Any | None = None,
-        status_provider: StoreStatusProvider | None = None,
         runtime_tracker: RuntimeTracker | None = None,
         poll_interval_ms: int = 5000,
     ):
@@ -59,7 +29,6 @@ class CompanionApp:
         self.tk = tk
         self.ttk = ttk
         self.store = store
-        self.status_provider = status_provider or StoreStatusProvider(store)
         self.runtime_tracker = runtime_tracker
         self.poll_interval_ms = poll_interval_ms
         self.last_runtime_error: str | None = None
@@ -213,7 +182,7 @@ class CompanionApp:
         return tree
 
     def _refresh_status(self) -> None:
-        status = self.status_provider.status()
+        status = self._status()
         if self.runtime_tracker is not None and self.runtime_tracker.previous_snapshot is not None:
             snapshot = self.runtime_tracker.previous_snapshot
             status["connection"] = "connected"
@@ -227,6 +196,29 @@ class CompanionApp:
                 self.status_vars[key].set(value)
             if key in getattr(self, "dashboard_vars", {}):
                 self.dashboard_vars[key].set(value)
+
+    def _status(self) -> dict[str, str]:
+        active = self.store.active_session_summary()
+        if active is None:
+            return {
+                "connection": "connected",
+                "project": "none",
+                "page": "none",
+                "state": "paused",
+                "active_elapsed": "0:00:00",
+                "heartbeat": "none",
+            }
+
+        started = _parse_utc(active["started_at_utc"])
+        elapsed = max(0, int((datetime.now(timezone.utc) - started).total_seconds()))
+        return {
+            "connection": "connected",
+            "project": active["project_name"],
+            "page": active["page"],
+            "state": active["activity_category"],
+            "active_elapsed": _duration(elapsed),
+            "heartbeat": active["last_heartbeat_at_utc"] or "none",
+        }
 
     def _refresh_dashboard(self) -> None:
         self._refresh_status()
@@ -328,7 +320,7 @@ class CompanionApp:
         if not path:
             return
         with Path(path).open("w", newline="", encoding="utf-8") as output:
-            export_sessions_csv(self.store, output)
+            self.store.write_csv(output)
 
     def _save_settings(self) -> None:
         from tkinter import messagebox

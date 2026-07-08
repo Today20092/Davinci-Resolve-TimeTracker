@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from resolve_time_tracker.database import SQLiteStore
-from resolve_time_tracker.exporter import export_sessions_csv
 from resolve_time_tracker.session_engine import SessionEngine
 
 
@@ -83,7 +82,7 @@ class CoreTrackingTest(unittest.TestCase):
                 engine.resolve_closed(utc(15, 30))
 
                 output = io.StringIO()
-                export_sessions_csv(store, output)
+                store.write_csv(output)
 
         rows = list(csv.DictReader(io.StringIO(output.getvalue())))
         self.assertEqual(1, len(rows))

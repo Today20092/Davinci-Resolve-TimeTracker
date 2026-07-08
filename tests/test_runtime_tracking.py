@@ -6,7 +6,6 @@ from pathlib import Path
 from resolve_time_tracker.activity_tracker import (
     RuntimeSnapshot,
     RuntimeTracker,
-    SequenceSnapshotProvider,
 )
 from resolve_time_tracker.database import SQLiteStore
 from resolve_time_tracker.resolve_bridge import ResolveBridge
@@ -15,6 +14,16 @@ from resolve_time_tracker.session_engine import SessionEngine
 
 def utc(hour: int, minute: int = 0) -> datetime:
     return datetime(2026, 1, 2, hour, minute, tzinfo=timezone.utc)
+
+
+class SequenceSnapshotProvider:
+    def __init__(self, snapshots: list[RuntimeSnapshot]):
+        self.snapshots = list(snapshots)
+
+    def snapshot(self) -> RuntimeSnapshot:
+        if not self.snapshots:
+            raise RuntimeError("No dry-run snapshots remain")
+        return self.snapshots.pop(0)
 
 
 class RuntimeTrackingTest(unittest.TestCase):

@@ -18,7 +18,7 @@ class InstallResolveMenuTest(unittest.TestCase):
             text = target.read_text(encoding="utf-8")
             self.assertIn(str(repo_root), text)
             self.assertIn("RESOLVE_TIME_TRACKER_REPO", text)
-            self.assertIn("ResolveTimeTrackerMenu.py", text)
+            self.assertIn("ResolveTimeTracker.py", text)
             self.assertIn('"fusion": globals().get("fusion")', text)
 
     def test_default_utility_dir_uses_linux_resolve_script_folder(self):

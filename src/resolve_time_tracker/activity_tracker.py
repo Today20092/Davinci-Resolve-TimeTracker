@@ -6,7 +6,7 @@ import ctypes
 import os
 from dataclasses import dataclass
 from ctypes import wintypes
-from typing import Protocol
+from typing import Any
 
 from resolve_time_tracker.session_engine import SessionEngine
 
@@ -23,18 +23,13 @@ class RuntimeSnapshot:
     timecode: str | None = None
 
 
-class SnapshotProvider(Protocol):
-    def snapshot(self) -> RuntimeSnapshot:
-        raise NotImplementedError
-
-
 class RuntimeTracker:
     def __init__(
         self,
         engine: SessionEngine,
         *,
         idle_timeout_seconds: int,
-        snapshot_provider: SnapshotProvider,
+        snapshot_provider: Any,
     ):
         self.engine = engine
         self.idle_timeout_seconds = idle_timeout_seconds
@@ -87,16 +82,6 @@ class RuntimeTracker:
         self._previous = snapshot
         self._previous_idle = idle_now
         return snapshot
-
-
-class SequenceSnapshotProvider:
-    def __init__(self, snapshots: list[RuntimeSnapshot]):
-        self.snapshots = list(snapshots)
-
-    def snapshot(self) -> RuntimeSnapshot:
-        if not self.snapshots:
-            raise RuntimeError("No dry-run snapshots remain")
-        return self.snapshots.pop(0)
 
 
 class LASTINPUTINFO(ctypes.Structure):
