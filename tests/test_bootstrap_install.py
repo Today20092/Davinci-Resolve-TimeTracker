@@ -13,8 +13,12 @@ class BootstrapInstallTest(unittest.TestCase):
             root = Path(tmp)
             (root / "scripts").mkdir()
             (root / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
-            (root / "scripts" / "ResolveTimeTracker.py").write_text("", encoding="utf-8")
-            (root / "scripts" / "install_resolve_menu.py").write_text("", encoding="utf-8")
+            (root / "scripts" / "ResolveTimeTracker.py").write_text(
+                "", encoding="utf-8"
+            )
+            (root / "scripts" / "install_resolve_menu.py").write_text(
+                "", encoding="utf-8"
+            )
 
             self.assertTrue(install.is_source_checkout(root))
 
@@ -23,18 +27,30 @@ class BootstrapInstallTest(unittest.TestCase):
             root = Path(tmp)
             (root / "scripts").mkdir()
             (root / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
-            (root / "scripts" / "ResolveTimeTracker.py").write_text("", encoding="utf-8")
-            (root / "scripts" / "install_resolve_menu.py").write_text("", encoding="utf-8")
+            (root / "scripts" / "ResolveTimeTracker.py").write_text(
+                "", encoding="utf-8"
+            )
+            (root / "scripts" / "install_resolve_menu.py").write_text(
+                "", encoding="utf-8"
+            )
 
-            self.assertEqual(root.resolve(), install.source_dir_for(root / "install.py", None))
+            self.assertEqual(
+                root.resolve(), install.source_dir_for(root / "install.py", None)
+            )
 
     def test_default_source_dir_is_platform_aware(self):
-        with patch("platform.system", return_value="Darwin"), patch("pathlib.Path.home", return_value=Path("/Users/me")):
+        with (
+            patch("platform.system", return_value="Darwin"),
+            patch("pathlib.Path.home", return_value=Path("/Users/me")),
+        ):
             self.assertEqual(
                 "/Users/me/Library/Application Support/ResolveTimeTracker/source",
                 str(install.default_source_dir()).replace("\\", "/"),
             )
-        with patch("platform.system", return_value="Linux"), patch.dict(os.environ, {"XDG_DATA_HOME": "/tmp/share"}):
+        with (
+            patch("platform.system", return_value="Linux"),
+            patch.dict(os.environ, {"XDG_DATA_HOME": "/tmp/share"}),
+        ):
             self.assertEqual(
                 "/tmp/share/ResolveTimeTracker/source",
                 str(install.default_source_dir()).replace("\\", "/"),
@@ -45,7 +61,10 @@ class BootstrapInstallTest(unittest.TestCase):
             source = Path(tmp) / "source"
             target = Path(tmp) / "ResolveTimeTrackerMenu.py"
             source.mkdir()
-            target.write_text(f'REPO_ROOT = Path(r"{source.resolve()}")\n"--companion"\n', encoding="utf-8")
+            target.write_text(
+                f'REPO_ROOT = Path(r"{source.resolve()}")\n"--companion"\n',
+                encoding="utf-8",
+            )
 
             install.verify_menu_script(target, source)
 
@@ -73,8 +92,12 @@ class BootstrapInstallTest(unittest.TestCase):
     def test_native_installers_use_uv_standalone_installers(self):
         root = Path(__file__).resolve().parents[1]
 
-        self.assertIn("https://astral.sh/uv/install.ps1", (root / "install.ps1").read_text())
-        self.assertIn("https://astral.sh/uv/install.sh", (root / "install.sh").read_text())
+        self.assertIn(
+            "https://astral.sh/uv/install.ps1", (root / "install.ps1").read_text()
+        )
+        self.assertIn(
+            "https://astral.sh/uv/install.sh", (root / "install.sh").read_text()
+        )
         self.assertIn("--no-sync", (root / "install.ps1").read_text())
         self.assertIn("--no-sync", (root / "install.sh").read_text())
 

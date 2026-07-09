@@ -110,6 +110,8 @@ This project targets Python because DaVinci Resolve exposes Python scripting.
 
 ```powershell
 uv sync
+uv run ruff format .
+uv run ruff check .
 uv run --python 3.13 scripts/ResolveTimeTracker.py --version
 uv run -m unittest discover -s tests
 ```

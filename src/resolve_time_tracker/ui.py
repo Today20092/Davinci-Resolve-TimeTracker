@@ -63,7 +63,9 @@ class CompanionApp:
         status = ttk.Frame(outer)
         status.pack(fill="x", pady=(0, 10))
         ttk.Button(status, text="Refresh", command=self.refresh).pack(side="right")
-        self.pause_button = ttk.Button(status, text="Pause Tracking", command=self._toggle_tracking)
+        self.pause_button = ttk.Button(
+            status, text="Pause Tracking", command=self._toggle_tracking
+        )
         self.pause_button.pack(side="right", padx=(0, 8))
         for label, key in [
             ("Resolve", "connection"),
@@ -108,7 +110,9 @@ class CompanionApp:
                 ("Last heartbeat", "heartbeat"),
             ]
         ):
-            self.ttk.Label(self.dashboard, text=label).grid(row=row, column=0, sticky="w")
+            self.ttk.Label(self.dashboard, text=label).grid(
+                row=row, column=0, sticky="w"
+            )
             self.dashboard_vars[key] = self.tk.StringVar(value="-")
             self.ttk.Label(self.dashboard, textvariable=self.dashboard_vars[key]).grid(
                 row=row,
@@ -139,7 +143,9 @@ class CompanionApp:
         )
         buttons = self.ttk.Frame(self.sessions)
         buttons.pack(fill="x", pady=(8, 0))
-        self.ttk.Button(buttons, text="Edit Selected", command=self._edit_selected_session).pack(
+        self.ttk.Button(
+            buttons, text="Edit Selected", command=self._edit_selected_session
+        ).pack(
             side="left",
         )
         self.ttk.Button(buttons, text="Export CSV...", command=self._export_csv).pack(
@@ -166,7 +172,9 @@ class CompanionApp:
             column=2,
             sticky="w",
         )
-        self.ttk.Label(self.settings, text="Data file").grid(row=1, column=0, sticky="w")
+        self.ttk.Label(self.settings, text="Data file").grid(
+            row=1, column=0, sticky="w"
+        )
         self.ttk.Label(self.settings, text=str(self.store.path)).grid(
             row=1,
             column=1,
@@ -175,7 +183,9 @@ class CompanionApp:
             padx=12,
         )
 
-    def _tree(self, parent: Any, columns: tuple[str, ...], headings: tuple[str, ...]) -> Any:
+    def _tree(
+        self, parent: Any, columns: tuple[str, ...], headings: tuple[str, ...]
+    ) -> Any:
         tree = self.ttk.Treeview(parent, columns=columns, show="headings", height=14)
         for column, heading in zip(columns, headings, strict=True):
             tree.heading(column, text=heading)
@@ -185,12 +195,18 @@ class CompanionApp:
 
     def _refresh_status(self) -> None:
         status = self._status()
-        if self.runtime_tracker is not None and self.runtime_tracker.previous_snapshot is not None:
+        if (
+            self.runtime_tracker is not None
+            and self.runtime_tracker.previous_snapshot is not None
+        ):
             snapshot = self.runtime_tracker.previous_snapshot
             status["connection"] = "connected"
             status["project"] = snapshot.project_name or "none"
             status["page"] = snapshot.page or "none"
-        if self.runtime_tracker is not None and not self.runtime_tracker.tracking_enabled:
+        if (
+            self.runtime_tracker is not None
+            and not self.runtime_tracker.tracking_enabled
+        ):
             status["state"] = "manual pause"
         if self.last_runtime_error:
             status["connection"] = "error"
@@ -202,7 +218,9 @@ class CompanionApp:
                 self.dashboard_vars[key].set(value)
         if self.runtime_tracker is not None:
             self.pause_button.configure(
-                text="Pause Tracking" if self.runtime_tracker.tracking_enabled else "Resume Tracking"
+                text="Pause Tracking"
+                if self.runtime_tracker.tracking_enabled
+                else "Resume Tracking"
             )
 
     def _status(self) -> dict[str, str]:
@@ -283,7 +301,9 @@ class CompanionApp:
             "activity_category": self.tk.StringVar(value=row["activity_category"]),
         }
         for index, (key, value) in enumerate(fields.items()):
-            self.ttk.Label(editor, text=key).grid(row=index, column=0, sticky="w", padx=8, pady=4)
+            self.ttk.Label(editor, text=key).grid(
+                row=index, column=0, sticky="w", padx=8, pady=4
+            )
             self.ttk.Entry(editor, textvariable=value, width=32).grid(
                 row=index,
                 column=1,
@@ -309,7 +329,9 @@ class CompanionApp:
             editor.destroy()
             self.refresh()
 
-        self.ttk.Button(editor, text="Save", command=save).grid(row=4, column=0, padx=8, pady=8)
+        self.ttk.Button(editor, text="Save", command=save).grid(
+            row=4, column=0, padx=8, pady=8
+        )
         self.ttk.Button(editor, text="Cancel", command=editor.destroy).grid(
             row=4,
             column=1,
@@ -348,7 +370,9 @@ class CompanionApp:
         else:
             self.runtime_tracker.resume()
             try:
-                poll_runtime_once(self.store, self.runtime_tracker, datetime.now(timezone.utc))
+                poll_runtime_once(
+                    self.store, self.runtime_tracker, datetime.now(timezone.utc)
+                )
                 self.last_runtime_error = None
             except Exception as exc:
                 self.last_runtime_error = f"{type(exc).__name__}: {exc}"
@@ -358,7 +382,9 @@ class CompanionApp:
         if self.runtime_tracker is None:
             return
         try:
-            poll_runtime_once(self.store, self.runtime_tracker, datetime.now(timezone.utc))
+            poll_runtime_once(
+                self.store, self.runtime_tracker, datetime.now(timezone.utc)
+            )
             self.last_runtime_error = None
         except Exception as exc:
             self.last_runtime_error = f"{type(exc).__name__}: {exc}"

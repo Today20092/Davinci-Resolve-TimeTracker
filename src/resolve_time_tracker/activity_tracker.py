@@ -68,7 +68,10 @@ class RuntimeTracker:
             else:
                 self.engine.idle_ended(observed_at)
 
-        if previous is None or snapshot.resolve_is_foreground != previous.resolve_is_foreground:
+        if (
+            previous is None
+            or snapshot.resolve_is_foreground != previous.resolve_is_foreground
+        ):
             if snapshot.resolve_is_foreground:
                 self.engine.resolve_focus_gained(observed_at)
             else:
@@ -185,7 +188,9 @@ class LinuxActivityProbe:
         return output is not None and "DaVinci Resolve" in output
 
 
-def default_activity_probe() -> WindowsActivityProbe | MacActivityProbe | LinuxActivityProbe | AlwaysActiveProbe:
+def default_activity_probe() -> (
+    WindowsActivityProbe | MacActivityProbe | LinuxActivityProbe | AlwaysActiveProbe
+):
     if os.name == "nt":
         return WindowsActivityProbe()
     if platform.system() == "Darwin":
@@ -193,14 +198,20 @@ def default_activity_probe() -> WindowsActivityProbe | MacActivityProbe | LinuxA
         osascript = _command_path("osascript", "/usr/bin/osascript")
         if ioreg and osascript:
             return MacActivityProbe(ioreg=ioreg, osascript=osascript)
-    if platform.system() == "Linux" and shutil.which("xprintidle") and shutil.which("xdotool"):
+    if (
+        platform.system() == "Linux"
+        and shutil.which("xprintidle")
+        and shutil.which("xdotool")
+    ):
         return LinuxActivityProbe()
     return AlwaysActiveProbe()
 
 
 def _run_text(command: list[str]) -> str | None:
     try:
-        return subprocess.check_output(command, text=True, stderr=subprocess.DEVNULL, timeout=2)
+        return subprocess.check_output(
+            command, text=True, stderr=subprocess.DEVNULL, timeout=2
+        )
     except (OSError, subprocess.SubprocessError):
         return None
 

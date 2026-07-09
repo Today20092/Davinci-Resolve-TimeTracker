@@ -9,7 +9,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from resolve_time_tracker.activity_tracker import RuntimeSnapshot, default_activity_probe
+from resolve_time_tracker.activity_tracker import (
+    RuntimeSnapshot,
+    default_activity_probe,
+)
 
 
 def default_scripting_root() -> Path:
@@ -43,7 +46,9 @@ class ResolveBridge:
         activity_probe: Any | None = None,
         resolve_object: Any | None = None,
     ):
-        self.module_path = Path(module_path) if module_path is not None else default_module_path()
+        self.module_path = (
+            Path(module_path) if module_path is not None else default_module_path()
+        )
         self.activity_probe = activity_probe or default_activity_probe()
         self._resolve_object = resolve_object
         self._module: Any | None = None
@@ -91,7 +96,9 @@ class ResolveBridge:
     def _load_module(self) -> Any:
         if self._module is not None:
             return self._module
-        spec = importlib.util.spec_from_file_location("DaVinciResolveScript", self.module_path)
+        spec = importlib.util.spec_from_file_location(
+            "DaVinciResolveScript", self.module_path
+        )
         if spec is None or spec.loader is None:
             raise RuntimeError(f"Cannot load Resolve bridge from {self.module_path}")
         module = importlib.util.module_from_spec(spec)
@@ -111,4 +118,3 @@ def _call(func: Any) -> Any | None:
         return func()
     except Exception:
         return None
-

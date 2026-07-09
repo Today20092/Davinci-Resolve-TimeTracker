@@ -12,7 +12,9 @@ class SQLiteStore:
     def __init__(self, path: str | Path, *, check_same_thread: bool = True):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._connection = sqlite3.connect(self.path, check_same_thread=check_same_thread)
+        self._connection = sqlite3.connect(
+            self.path, check_same_thread=check_same_thread
+        )
         self._connection.row_factory = sqlite3.Row
         self._create_schema()
 
@@ -180,7 +182,9 @@ class SQLiteStore:
         activity_category: str,
     ) -> None:
         if activity_category not in {"editing", "playback", "rendering"}:
-            raise ValueError("activity_category must be editing, playback, or rendering")
+            raise ValueError(
+                "activity_category must be editing, playback, or rendering"
+            )
         started = _format_utc(started_at)
         ended = _format_utc(ended_at)
         if ended < started:

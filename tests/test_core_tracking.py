@@ -39,9 +39,21 @@ class CoreTrackingTest(unittest.TestCase):
                 ("Project A", "Unknown", "editing", 9 * 3600, 9 * 3600 + 5 * 60),
                 ("Project A", "edit", "editing", 9 * 3600 + 5 * 60, 9 * 3600 + 30 * 60),
                 ("Project A", "edit", "editing", 9 * 3600 + 45 * 60, 10 * 3600),
-                ("Project A", "edit", "editing", 10 * 3600 + 15 * 60, 10 * 3600 + 30 * 60),
+                (
+                    "Project A",
+                    "edit",
+                    "editing",
+                    10 * 3600 + 15 * 60,
+                    10 * 3600 + 30 * 60,
+                ),
                 ("Project A", "edit", "rendering", 10 * 3600 + 30 * 60, 11 * 3600),
-                ("Project A", "edit", "editing", 11 * 3600 + 15 * 60, 11 * 3600 + 30 * 60),
+                (
+                    "Project A",
+                    "edit",
+                    "editing",
+                    11 * 3600 + 15 * 60,
+                    11 * 3600 + 30 * 60,
+                ),
                 ("Project B", "edit", "editing", 11 * 3600 + 30 * 60, 12 * 3600),
             ],
             [

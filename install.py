@@ -46,7 +46,9 @@ def ensure_source(source_dir: Path, repo_url: str) -> None:
     if is_source_checkout(source_dir):
         return
     if source_dir.exists():
-        raise RuntimeError(f"{source_dir} exists but is not a Resolve Time Tracker checkout")
+        raise RuntimeError(
+            f"{source_dir} exists but is not a Resolve Time Tracker checkout"
+        )
     git = shutil.which("git")
     if git is None:
         raise RuntimeError("git is required to clone Resolve Time Tracker source")
@@ -69,7 +71,9 @@ def ensure_uv() -> list[str]:
     command = uv_command()
     if command is not None:
         return command
-    raise RuntimeError("uv is required. Run install.ps1 on Windows or install.sh on macOS/Linux.")
+    raise RuntimeError(
+        "uv is required. Run install.ps1 on Windows or install.sh on macOS/Linux."
+    )
 
 
 def venv_python(source_dir: Path) -> Path | None:
@@ -92,7 +96,9 @@ def install_menu(source_dir: Path, uv: list[str], utility_dir: Path | None) -> P
         run([*uv, "sync"], cwd=source_dir)
         python = venv_python(source_dir)
     if python is None:
-        raise RuntimeError(f"uv sync did not create a virtualenv Python under {source_dir / '.venv'}")
+        raise RuntimeError(
+            f"uv sync did not create a virtualenv Python under {source_dir / '.venv'}"
+        )
     command = [str(python), "scripts/install_resolve_menu.py"]
     if utility_dir is not None:
         command.extend(["--utility-dir", str(utility_dir)])
@@ -107,7 +113,9 @@ def verify_menu_script(target: Path, source_dir: Path) -> None:
         raise RuntimeError(f"Resolve menu script was not created: {target}")
     text = target.read_text(encoding="utf-8")
     if str(source_dir.resolve()) not in text or "--companion" not in text:
-        raise RuntimeError(f"Resolve menu script does not point at this checkout: {target}")
+        raise RuntimeError(
+            f"Resolve menu script does not point at this checkout: {target}"
+        )
 
 
 def run(command: list[str], *, cwd: Path | None = None) -> str:
@@ -123,10 +131,16 @@ def run(command: list[str], *, cwd: Path | None = None) -> str:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Install Resolve Time Tracker for DaVinci Resolve")
-    parser.add_argument("--source-dir", type=Path, help="Existing or new Resolve Time Tracker checkout")
+    parser = argparse.ArgumentParser(
+        description="Install Resolve Time Tracker for DaVinci Resolve"
+    )
+    parser.add_argument(
+        "--source-dir", type=Path, help="Existing or new Resolve Time Tracker checkout"
+    )
     parser.add_argument("--repo-url", default=REPO_URL)
-    parser.add_argument("--utility-dir", type=Path, help="Override Resolve Scripts/Utility folder")
+    parser.add_argument(
+        "--utility-dir", type=Path, help="Override Resolve Scripts/Utility folder"
+    )
     return parser.parse_args()
 
 

@@ -28,7 +28,9 @@ def run_resolve_ui(
     fusion = _fusion_app(resolve, bmd, fusion)
     ui = _ui_manager(fusion)
     if ui is None or bmd is None:
-        raise RuntimeError("Resolve UIManager is unavailable. Run this from Resolve's Scripts menu.")
+        raise RuntimeError(
+            "Resolve UIManager is unavailable. Run this from Resolve's Scripts menu."
+        )
 
     dispatcher = bmd.UIDispatcher(ui)
     db_path = Path(db_path)
@@ -81,7 +83,10 @@ def run_resolve_ui(
         set_text("Status", f"Status: {state}")
         set_text("Project", f"Project: {snapshot.project_name or '-'}")
         set_text("Page", f"Page: {snapshot.page or 'Unknown'}")
-        set_text("Activity", f"Activity: {'rendering' if snapshot.is_rendering else 'editing'}")
+        set_text(
+            "Activity",
+            f"Activity: {'rendering' if snapshot.is_rendering else 'editing'}",
+        )
         set_text("Heartbeat", f"Heartbeat: {datetime.now().strftime('%H:%M:%S')}")
 
     def export_csv() -> None:

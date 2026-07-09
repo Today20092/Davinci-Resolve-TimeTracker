@@ -11,6 +11,8 @@ uv sync
 ## Test
 
 ```sh
+uv run ruff format .
+uv run ruff check .
 uv run -m unittest discover -s tests
 ```
 

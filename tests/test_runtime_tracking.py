@@ -48,7 +48,13 @@ class RuntimeTrackingTest(unittest.TestCase):
                     ),
                 )
 
-                for observed_at in [utc(9), utc(9, 10), utc(9, 20), utc(9, 30), utc(9, 40)]:
+                for observed_at in [
+                    utc(9),
+                    utc(9, 10),
+                    utc(9, 20),
+                    utc(9, 30),
+                    utc(9, 40),
+                ]:
                     tracker.poll(observed_at)
 
                 rows = store.sessions()
@@ -185,15 +191,17 @@ class RuntimeTrackingTest(unittest.TestCase):
         self.assertTrue(probe.resolve_is_foreground())
 
     def test_resolve_bridge_scripting_root_is_platform_aware(self):
-        with patch("platform.system", return_value="Darwin"), patch.dict(
-            "os.environ", {}, clear=True
+        with (
+            patch("platform.system", return_value="Darwin"),
+            patch.dict("os.environ", {}, clear=True),
         ):
             self.assertEqual(
                 "/Library/Application Support/Blackmagic Design/DaVinci Resolve/Developer/Scripting",
                 str(default_scripting_root()).replace("\\", "/"),
             )
-        with patch("platform.system", return_value="Linux"), patch.dict(
-            "os.environ", {}, clear=True
+        with (
+            patch("platform.system", return_value="Linux"),
+            patch.dict("os.environ", {}, clear=True),
         ):
             self.assertEqual(
                 "/opt/resolve/Developer/Scripting",
@@ -202,7 +210,9 @@ class RuntimeTrackingTest(unittest.TestCase):
 
     def test_resolve_bridge_scripting_root_honors_env_override(self):
         with patch.dict("os.environ", {"RESOLVE_SCRIPT_API": "/tmp/resolve-api"}):
-            self.assertEqual("/tmp/resolve-api", str(default_scripting_root()).replace("\\", "/"))
+            self.assertEqual(
+                "/tmp/resolve-api", str(default_scripting_root()).replace("\\", "/")
+            )
 
     def test_resolve_bridge_snapshot_reads_safe_runtime_fields(self):
         bridge = ResolveBridge(activity_probe=FakeActivity())
