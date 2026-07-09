@@ -3,7 +3,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from scripts.ResolveTimeTracker import default_db_path
+from scripts.ResolveTimeTracker import (
+    default_db_path,
+    parse_args,
+    run_electron_companion,
+)
 
 
 class LauncherTest(unittest.TestCase):
@@ -36,3 +40,26 @@ class LauncherTest(unittest.TestCase):
                 "/tmp/share/ResolveTimeTracker/tracker.sqlite3",
                 str(default_db_path()).replace("\\", "/"),
             )
+
+    def test_parses_api_sidecar_arguments(self):
+        args = parse_args(["--api", "--host", "127.0.0.1", "--port", "9000"])
+
+        self.assertTrue(args.api)
+        self.assertEqual("127.0.0.1", args.host)
+        self.assertEqual(9000, args.port)
+
+    def test_companion_launches_electron_with_current_python(self):
+        with (
+            patch("shutil.which", return_value="npm"),
+            patch("subprocess.run") as run,
+            patch.dict(os.environ, {}, clear=True),
+        ):
+            run.return_value.returncode = 0
+
+            self.assertEqual(0, run_electron_companion(Path("tracker.sqlite3")))
+
+        command = run.call_args.args[0]
+        env = run.call_args.kwargs["env"]
+        self.assertEqual(["npm", "run", "desktop", "--"], command[:4])
+        self.assertIn("--db", command)
+        self.assertIn("RESOLVE_TIME_TRACKER_PYTHON", env)

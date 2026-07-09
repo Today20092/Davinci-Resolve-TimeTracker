@@ -108,6 +108,17 @@ def install_menu(source_dir: Path, uv: list[str], utility_dir: Path | None) -> P
     return target
 
 
+def install_frontend(source_dir: Path) -> None:
+    frontend_dir = source_dir / "frontend"
+    if not (frontend_dir / "package.json").is_file():
+        return
+    npm = shutil.which("npm.cmd" if os.name == "nt" else "npm")
+    if npm is None:
+        raise RuntimeError("npm is required to install the Electron companion")
+    run([npm, "ci"], cwd=frontend_dir)
+    run([npm, "run", "build"], cwd=frontend_dir)
+
+
 def verify_menu_script(target: Path, source_dir: Path) -> None:
     if not target.is_file():
         raise RuntimeError(f"Resolve menu script was not created: {target}")
@@ -149,6 +160,7 @@ def main() -> int:
     source_dir = source_dir_for(Path(__file__), args.source_dir)
     ensure_source(source_dir, args.repo_url)
     uv = ensure_uv()
+    install_frontend(source_dir)
     target = install_menu(source_dir, uv, args.utility_dir)
     print(f"Source: {source_dir}")
     print(f"Resolve menu script: {target}")

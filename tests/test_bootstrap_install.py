@@ -2,7 +2,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 import install
 
@@ -88,6 +88,27 @@ class BootstrapInstallTest(unittest.TestCase):
         with patch("install.uv_command", return_value=None):
             with self.assertRaisesRegex(RuntimeError, "install.ps1"):
                 install.ensure_uv()
+
+    def test_install_frontend_runs_npm_ci_and_build(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp)
+            frontend = source / "frontend"
+            frontend.mkdir()
+            (frontend / "package.json").write_text("{}", encoding="utf-8")
+
+            with (
+                patch("shutil.which", return_value="npm"),
+                patch("install.run") as run,
+            ):
+                install.install_frontend(source)
+
+        self.assertEqual(
+            [
+                call(["npm", "ci"], cwd=frontend),
+                call(["npm", "run", "build"], cwd=frontend),
+            ],
+            run.mock_calls,
+        )
 
     def test_native_installers_use_uv_standalone_installers(self):
         root = Path(__file__).resolve().parents[1]

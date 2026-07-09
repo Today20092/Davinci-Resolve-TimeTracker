@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
@@ -107,9 +108,7 @@ class ApiState:
             except ValueError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
             if self.runtime_tracker is not None:
-                self.runtime_tracker.idle_timeout_seconds = (
-                    update.idle_timeout_seconds
-                )
+                self.runtime_tracker.idle_timeout_seconds = update.idle_timeout_seconds
             return self._settings_unlocked()
 
     def update_session(self, session_id: int, update: SessionUpdate) -> dict[str, Any]:
@@ -224,6 +223,12 @@ def create_app(
 ) -> FastAPI:
     api = ApiState(store, runtime_tracker=runtime_tracker, now=now)
     app = FastAPI(title="Resolve Time Tracker")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     app.state.api = api
 
     @app.get("/status")

@@ -28,7 +28,9 @@ class SequenceSnapshotProvider:
 class ApiTest(unittest.TestCase):
     def test_status_projects_sessions_settings_and_csv(self):
         with tempfile.TemporaryDirectory() as tmp:
-            with SQLiteStore(Path(tmp) / "tracker.sqlite3", check_same_thread=False) as store:
+            with SQLiteStore(
+                Path(tmp) / "tracker.sqlite3", check_same_thread=False
+            ) as store:
                 engine = SessionEngine(store)
                 engine.project_changed(utc(9), "Project A")
                 engine.resolve_closed(utc(10))
@@ -54,7 +56,9 @@ class ApiTest(unittest.TestCase):
 
     def test_tracking_controls_and_mutations(self):
         with tempfile.TemporaryDirectory() as tmp:
-            with SQLiteStore(Path(tmp) / "tracker.sqlite3", check_same_thread=False) as store:
+            with SQLiteStore(
+                Path(tmp) / "tracker.sqlite3", check_same_thread=False
+            ) as store:
                 tracker = RuntimeTracker(
                     SessionEngine(store),
                     idle_timeout_seconds=300,
@@ -94,16 +98,34 @@ class ApiTest(unittest.TestCase):
 
     def test_events_stream_status_as_sse(self):
         with tempfile.TemporaryDirectory() as tmp:
-            with SQLiteStore(Path(tmp) / "tracker.sqlite3", check_same_thread=False) as store:
+            with SQLiteStore(
+                Path(tmp) / "tracker.sqlite3", check_same_thread=False
+            ) as store:
                 app = create_app(store, now=lambda: utc(9))
                 client = TestClient(app)
 
                 with client.stream("GET", "/events?once=true") as response:
                     body = response.read().decode()
 
-        self.assertEqual("text/event-stream; charset=utf-8", response.headers["content-type"])
+        self.assertEqual(
+            "text/event-stream; charset=utf-8", response.headers["content-type"]
+        )
         self.assertIn("event: status", body)
         self.assertIn('"state":"paused"', body)
+
+    def test_allows_frontend_origin(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with SQLiteStore(
+                Path(tmp) / "tracker.sqlite3", check_same_thread=False
+            ) as store:
+                app = create_app(store, now=lambda: utc(9))
+                client = TestClient(app)
+
+                response = client.get(
+                    "/status", headers={"origin": "http://127.0.0.1:5173"}
+                )
+
+        self.assertEqual("*", response.headers["access-control-allow-origin"])
 
 
 if __name__ == "__main__":

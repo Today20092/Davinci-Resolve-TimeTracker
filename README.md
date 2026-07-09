@@ -19,6 +19,7 @@ From PowerShell in this checkout:
 ```
 
 If you do not have the checkout yet, clone or download this repository first.
+The installer also builds the Electron companion UI, so Node.js/npm must be available.
 
 ### macOS
 
@@ -101,6 +102,7 @@ The platform installer:
 
 - Installs `uv` with Astral's official installer if missing.
 - Creates or reuses the project `.venv`.
+- Installs and builds the Electron companion UI from `frontend/`.
 - Installs `ResolveTimeTrackerMenu.py` into Resolve's Scripts/Utility folder.
 - Verifies the Resolve menu script points at this checkout.
 
@@ -114,6 +116,8 @@ uv run ruff format .
 uv run ruff check .
 uv run --python 3.13 scripts/ResolveTimeTracker.py --version
 uv run -m unittest discover -s tests
+cd frontend
+npm run desktop:dev
 ```
 
 Useful docs:
