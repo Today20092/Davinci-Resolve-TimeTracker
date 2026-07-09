@@ -4,9 +4,14 @@ from __future__ import annotations
 
 import ctypes
 import os
+import platform
+import re
+import shutil
+import subprocess
 from dataclasses import dataclass
 from ctypes import wintypes
-from typing import Any
+from pathlib import Path
+from typing import Any, Callable
 
 from resolve_time_tracker.session_engine import SessionEngine
 
@@ -36,12 +41,18 @@ class RuntimeTracker:
         self.snapshot_provider = snapshot_provider
         self._previous: RuntimeSnapshot | None = None
         self._previous_idle: bool | None = None
+        self.tracking_enabled = True
 
     @property
     def previous_snapshot(self) -> RuntimeSnapshot | None:
         return self._previous
 
     def poll(self, observed_at) -> RuntimeSnapshot:
+        if not self.tracking_enabled:
+            self.engine.resolve_closed(observed_at)
+            self._previous_idle = None
+            return self._previous or RuntimeSnapshot(None, None, False, None, False)
+
         snapshot = self.snapshot_provider.snapshot()
         previous = self._previous
 
@@ -83,6 +94,15 @@ class RuntimeTracker:
         self._previous_idle = idle_now
         return snapshot
 
+    def pause(self, observed_at) -> None:
+        self.tracking_enabled = False
+        self.engine.resolve_closed(observed_at)
+
+    def resume(self) -> None:
+        self.tracking_enabled = True
+        self._previous = None
+        self._previous_idle = None
+
 
 class LASTINPUTINFO(ctypes.Structure):
     _fields_ = [("cbSize", wintypes.UINT), ("dwTime", wintypes.DWORD)]
@@ -116,7 +136,77 @@ class WindowsActivityProbe:
         return "DaVinci Resolve" in self.foreground_window_title()
 
 
-def default_activity_probe() -> WindowsActivityProbe | AlwaysActiveProbe:
+class MacActivityProbe:
+    def __init__(
+        self,
+        run_text: Callable[[list[str]], str | None] | None = None,
+        ioreg: str = "ioreg",
+        osascript: str = "osascript",
+    ):
+        self.run_text = run_text or _run_text
+        self.ioreg = ioreg
+        self.osascript = osascript
+
+    def idle_seconds(self) -> float | None:
+        output = self.run_text([self.ioreg, "-c", "IOHIDSystem"])
+        if output is None:
+            return None
+        match = re.search(r'"HIDIdleTime"\s*=\s*(\d+)', output)
+        if match is None:
+            return None
+        return int(match.group(1)) / 1_000_000_000
+
+    def resolve_is_foreground(self) -> bool:
+        output = self.run_text(
+            [
+                self.osascript,
+                "-e",
+                'tell application "System Events" to get name of first process whose frontmost is true',
+            ]
+        )
+        return output is not None and "DaVinci Resolve" in output
+
+
+class LinuxActivityProbe:
+    def __init__(self, run_text: Callable[[list[str]], str | None] | None = None):
+        self.run_text = run_text or _run_text
+
+    def idle_seconds(self) -> float | None:
+        output = self.run_text(["xprintidle"])
+        if output is None:
+            return None
+        try:
+            return int(output.strip()) / 1000
+        except ValueError:
+            return None
+
+    def resolve_is_foreground(self) -> bool:
+        output = self.run_text(["xdotool", "getactivewindow", "getwindowname"])
+        return output is not None and "DaVinci Resolve" in output
+
+
+def default_activity_probe() -> WindowsActivityProbe | MacActivityProbe | LinuxActivityProbe | AlwaysActiveProbe:
     if os.name == "nt":
         return WindowsActivityProbe()
+    if platform.system() == "Darwin":
+        ioreg = _command_path("ioreg", "/usr/sbin/ioreg")
+        osascript = _command_path("osascript", "/usr/bin/osascript")
+        if ioreg and osascript:
+            return MacActivityProbe(ioreg=ioreg, osascript=osascript)
+    if platform.system() == "Linux" and shutil.which("xprintidle") and shutil.which("xdotool"):
+        return LinuxActivityProbe()
     return AlwaysActiveProbe()
+
+
+def _run_text(command: list[str]) -> str | None:
+    try:
+        return subprocess.check_output(command, text=True, stderr=subprocess.DEVNULL, timeout=2)
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def _command_path(name: str, fallback: str) -> str | None:
+    found = shutil.which(name)
+    if found:
+        return found
+    return fallback if Path(fallback).exists() else None

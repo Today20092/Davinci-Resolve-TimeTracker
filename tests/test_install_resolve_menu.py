@@ -19,11 +19,22 @@ class InstallResolveMenuTest(unittest.TestCase):
             self.assertIn(str(repo_root), text)
             self.assertIn("RESOLVE_TIME_TRACKER_REPO", text)
             self.assertIn("ResolveTimeTracker.py", text)
-            self.assertIn('"fusion": globals().get("fusion")', text)
+            self.assertIn("--companion", text)
+            self.assertIn("subprocess.Popen", text)
+            self.assertIn('os.name == "nt"', text)
+            self.assertIn('".venv" / "bin" / "python"', text)
+            self.assertIn("Run uv sync", text)
 
     def test_default_utility_dir_uses_linux_resolve_script_folder(self):
         with patch("platform.system", return_value="Linux"), patch.dict("os.environ", {"XDG_DATA_HOME": "/tmp/share"}):
             self.assertEqual(
                 Path("/tmp/share/DaVinciResolve/Fusion/Scripts/Utility"),
+                default_utility_dir(),
+            )
+
+    def test_default_utility_dir_uses_macos_resolve_script_folder(self):
+        with patch("platform.system", return_value="Darwin"), patch("pathlib.Path.home", return_value=Path("/Users/me")):
+            self.assertEqual(
+                Path("/Users/me/Library/Application Support/Blackmagic Design/DaVinci Resolve/Fusion/Scripts/Utility"),
                 default_utility_dir(),
             )

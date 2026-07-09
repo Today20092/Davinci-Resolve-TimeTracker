@@ -63,6 +63,8 @@ class CompanionApp:
         status = ttk.Frame(outer)
         status.pack(fill="x", pady=(0, 10))
         ttk.Button(status, text="Refresh", command=self.refresh).pack(side="right")
+        self.pause_button = ttk.Button(status, text="Pause Tracking", command=self._toggle_tracking)
+        self.pause_button.pack(side="right", padx=(0, 8))
         for label, key in [
             ("Resolve", "connection"),
             ("Project", "project"),
@@ -188,6 +190,8 @@ class CompanionApp:
             status["connection"] = "connected"
             status["project"] = snapshot.project_name or "none"
             status["page"] = snapshot.page or "none"
+        if self.runtime_tracker is not None and not self.runtime_tracker.tracking_enabled:
+            status["state"] = "manual pause"
         if self.last_runtime_error:
             status["connection"] = "error"
             status["heartbeat"] = self.last_runtime_error
@@ -196,6 +200,10 @@ class CompanionApp:
                 self.status_vars[key].set(value)
             if key in getattr(self, "dashboard_vars", {}):
                 self.dashboard_vars[key].set(value)
+        if self.runtime_tracker is not None:
+            self.pause_button.configure(
+                text="Pause Tracking" if self.runtime_tracker.tracking_enabled else "Resume Tracking"
+            )
 
     def _status(self) -> dict[str, str]:
         active = self.store.active_session_summary()
@@ -330,6 +338,20 @@ class CompanionApp:
         except ValueError as exc:
             messagebox.showerror("Invalid setting", str(exc), parent=self.root)
             return
+        self.refresh()
+
+    def _toggle_tracking(self) -> None:
+        if self.runtime_tracker is None:
+            return
+        if self.runtime_tracker.tracking_enabled:
+            self.runtime_tracker.pause(datetime.now(timezone.utc))
+        else:
+            self.runtime_tracker.resume()
+            try:
+                poll_runtime_once(self.store, self.runtime_tracker, datetime.now(timezone.utc))
+                self.last_runtime_error = None
+            except Exception as exc:
+                self.last_runtime_error = f"{type(exc).__name__}: {exc}"
         self.refresh()
 
     def _poll_runtime(self) -> None:

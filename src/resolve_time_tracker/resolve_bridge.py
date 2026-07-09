@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import platform
 import sys
 from pathlib import Path
 from typing import Any
@@ -11,23 +12,38 @@ from typing import Any
 from resolve_time_tracker.activity_tracker import RuntimeSnapshot, default_activity_probe
 
 
-SCRIPTING_ROOT = Path(
-    os.environ.get(
-        "RESOLVE_SCRIPT_API",
-        r"C:\ProgramData\Blackmagic Design\DaVinci Resolve\Support\Developer\Scripting",
-    )
-)
-MODULE_PATH = SCRIPTING_ROOT / "Modules" / "DaVinciResolveScript.py"
+def default_scripting_root() -> Path:
+    configured = os.environ.get("RESOLVE_SCRIPT_API")
+    if configured:
+        return Path(configured)
+    system = platform.system()
+    if system == "Windows":
+        return Path(
+            r"C:\ProgramData\Blackmagic Design\DaVinci Resolve\Support\Developer\Scripting"
+        )
+    if system == "Darwin":
+        return Path(
+            "/Library/Application Support/Blackmagic Design/DaVinci Resolve/Developer/Scripting"
+        )
+    return Path("/opt/resolve/Developer/Scripting")
+
+
+def default_module_path() -> Path:
+    return default_scripting_root() / "Modules" / "DaVinciResolveScript.py"
+
+
+SCRIPTING_ROOT = default_scripting_root()
+MODULE_PATH = default_module_path()
 
 
 class ResolveBridge:
     def __init__(
         self,
-        module_path: str | Path = MODULE_PATH,
+        module_path: str | Path | None = None,
         activity_probe: Any | None = None,
         resolve_object: Any | None = None,
     ):
-        self.module_path = Path(module_path)
+        self.module_path = Path(module_path) if module_path is not None else default_module_path()
         self.activity_probe = activity_probe or default_activity_probe()
         self._resolve_object = resolve_object
         self._module: Any | None = None
@@ -95,3 +111,4 @@ def _call(func: Any) -> Any | None:
         return func()
     except Exception:
         return None
+

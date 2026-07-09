@@ -50,21 +50,30 @@ def launcher_text(repo_root: Path) -> str:
 from __future__ import annotations
 
 import os
-import runpy
+import subprocess
 from pathlib import Path
 
 
 REPO_ROOT = Path(r"{repo_root}")
-os.environ["RESOLVE_TIME_TRACKER_REPO"] = str(REPO_ROOT)
-runpy.run_path(
-    str(REPO_ROOT / "scripts" / "ResolveTimeTracker.py"),
-    run_name="__main__",
-    init_globals={{
-        "resolve": globals().get("resolve"),
-        "project": globals().get("project"),
-        "fusion": globals().get("fusion"),
-        "bmd": globals().get("bmd"),
-    }},
+env = os.environ.copy()
+env["RESOLVE_TIME_TRACKER_REPO"] = str(REPO_ROOT)
+if os.name == "nt":
+    candidates = [
+        REPO_ROOT / ".venv" / "Scripts" / "pythonw.exe",
+        REPO_ROOT / ".venv" / "Scripts" / "python.exe",
+    ]
+else:
+    candidates = [
+        REPO_ROOT / ".venv" / "bin" / "pythonw",
+        REPO_ROOT / ".venv" / "bin" / "python",
+    ]
+python = next((candidate for candidate in candidates if candidate.exists()), None)
+if python is None:
+    raise RuntimeError(f"Run uv sync before launching Resolve Time Tracker: {{REPO_ROOT / '.venv'}}")
+subprocess.Popen(
+    [str(python), str(REPO_ROOT / "scripts" / "ResolveTimeTracker.py"), "--companion"],
+    cwd=str(REPO_ROOT),
+    env=env,
 )
 '''
 

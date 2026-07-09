@@ -2,13 +2,16 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 from resolve_time_tracker.activity_tracker import (
+    LinuxActivityProbe,
+    MacActivityProbe,
     RuntimeSnapshot,
     RuntimeTracker,
 )
 from resolve_time_tracker.database import SQLiteStore
-from resolve_time_tracker.resolve_bridge import ResolveBridge
+from resolve_time_tracker.resolve_bridge import ResolveBridge, default_scripting_root
 from resolve_time_tracker.session_engine import SessionEngine
 
 
@@ -130,6 +133,76 @@ class RuntimeTrackingTest(unittest.TestCase):
                 active = store.active_session()
 
         self.assertEqual("2026-01-02T12:01:00Z", active["started_at_utc"])
+
+    def test_manual_pause_closes_and_resume_reopens_on_next_poll(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with SQLiteStore(Path(tmp) / "tracker.sqlite3") as store:
+                tracker = RuntimeTracker(
+                    SessionEngine(store),
+                    idle_timeout_seconds=300,
+                    snapshot_provider=SequenceSnapshotProvider(
+                        [
+                            RuntimeSnapshot("Project A", "edit", False, 0, True),
+                            RuntimeSnapshot("Project A", "edit", False, 0, True),
+                            RuntimeSnapshot("Project A", "edit", False, 0, True),
+                        ]
+                    ),
+                )
+
+                tracker.poll(utc(13))
+                tracker.pause(utc(13, 10))
+                paused_snapshot = tracker.poll(utc(13, 20))
+                tracker.resume()
+                tracker.poll(utc(13, 30))
+
+                rows = store.sessions()
+                active = store.active_session()
+
+        self.assertEqual("Project A", paused_snapshot.project_name)
+        self.assertEqual("2026-01-02T13:10:00Z", rows[0]["ended_at_utc"])
+        self.assertEqual("2026-01-02T13:30:00Z", active["started_at_utc"])
+
+    def test_mac_activity_probe_parses_idle_and_foreground(self):
+        def run_text(command: list[str]) -> str:
+            if command[0] == "ioreg":
+                return '    "HIDIdleTime" = 2500000000\n'
+            return "DaVinci Resolve\n"
+
+        probe = MacActivityProbe(run_text=run_text)
+
+        self.assertEqual(2.5, probe.idle_seconds())
+        self.assertTrue(probe.resolve_is_foreground())
+
+    def test_linux_activity_probe_parses_idle_and_foreground(self):
+        def run_text(command: list[str]) -> str:
+            if command[0] == "xprintidle":
+                return "2500\n"
+            return "DaVinci Resolve Studio\n"
+
+        probe = LinuxActivityProbe(run_text=run_text)
+
+        self.assertEqual(2.5, probe.idle_seconds())
+        self.assertTrue(probe.resolve_is_foreground())
+
+    def test_resolve_bridge_scripting_root_is_platform_aware(self):
+        with patch("platform.system", return_value="Darwin"), patch.dict(
+            "os.environ", {}, clear=True
+        ):
+            self.assertEqual(
+                "/Library/Application Support/Blackmagic Design/DaVinci Resolve/Developer/Scripting",
+                str(default_scripting_root()).replace("\\", "/"),
+            )
+        with patch("platform.system", return_value="Linux"), patch.dict(
+            "os.environ", {}, clear=True
+        ):
+            self.assertEqual(
+                "/opt/resolve/Developer/Scripting",
+                str(default_scripting_root()).replace("\\", "/"),
+            )
+
+    def test_resolve_bridge_scripting_root_honors_env_override(self):
+        with patch.dict("os.environ", {"RESOLVE_SCRIPT_API": "/tmp/resolve-api"}):
+            self.assertEqual("/tmp/resolve-api", str(default_scripting_root()).replace("\\", "/"))
 
     def test_resolve_bridge_snapshot_reads_safe_runtime_fields(self):
         bridge = ResolveBridge(activity_probe=FakeActivity())

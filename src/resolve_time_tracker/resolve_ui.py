@@ -25,12 +25,11 @@ def run_resolve_ui(
 ) -> None:
     if resolve is None and bmd is not None and hasattr(bmd, "scriptapp"):
         resolve = bmd.scriptapp("Resolve")
-    if fusion is None and resolve is not None:
-        fusion = resolve.Fusion()
-    if fusion is None or bmd is None:
+    fusion = _fusion_app(resolve, bmd, fusion)
+    ui = _ui_manager(fusion)
+    if ui is None or bmd is None:
         raise RuntimeError("Resolve UIManager is unavailable. Run this from Resolve's Scripts menu.")
 
-    ui = _ui_manager(fusion)
     dispatcher = bmd.UIDispatcher(ui)
     db_path = Path(db_path)
     store = SQLiteStore(db_path, check_same_thread=False)
@@ -119,6 +118,22 @@ def run_resolve_ui(
     stopped.set()
 
 
-def _ui_manager(fusion: Any) -> Any:
-    manager = fusion.UIManager
+def _fusion_app(resolve: Any | None, bmd: Any | None, fusion: Any | None) -> Any | None:
+    if _ui_manager(fusion) is not None:
+        return fusion
+    if bmd is not None and hasattr(bmd, "scriptapp"):
+        candidate = bmd.scriptapp("Fusion")
+        if _ui_manager(candidate) is not None:
+            return candidate
+    if resolve is not None:
+        candidate = resolve.Fusion()
+        if _ui_manager(candidate) is not None:
+            return candidate
+    return fusion
+
+
+def _ui_manager(fusion: Any | None) -> Any | None:
+    if fusion is None:
+        return None
+    manager = getattr(fusion, "UIManager", None)
     return manager() if callable(manager) else manager
