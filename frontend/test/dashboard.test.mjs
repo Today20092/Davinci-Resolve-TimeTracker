@@ -3,6 +3,7 @@ import test from "node:test"
 
 import {
   currentProjectDashboard,
+  displayPage,
   projectExportSummary,
 } from "../src/lib/dashboard.ts"
 
@@ -48,6 +49,33 @@ test("current project dashboard includes saved and live project time", () => {
     { page: "Edit", seconds: 120 },
     { page: "Deliver", seconds: 30 },
   ])
+})
+
+test("rendering with no Resolve page is shown as render export time", () => {
+  const dashboard = currentProjectDashboard(
+    [
+      {
+        id: 1,
+        project_name: "Food Photography",
+        started_at_utc: "",
+        ended_at_utc: "",
+        duration_seconds: 90,
+        duration: "0:01:30",
+        page: "Unknown",
+        activity_category: "rendering",
+      },
+    ],
+    {
+      project: "Food Photography",
+      page: "none",
+      state: "paused",
+      active_elapsed_seconds: 0,
+    }
+  )
+
+  assert.deepEqual(dashboard.pageData, [{ page: "Render/Export", seconds: 90 }])
+  assert.equal(displayPage("Unknown", "editing"), "Unknown")
+  assert.equal(displayPage("none", "rendering"), "Render/Export")
 })
 
 test("project export summary reports the current project date range", () => {
