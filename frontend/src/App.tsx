@@ -4,9 +4,6 @@ import {
   BarChart,
   Cell,
   LabelList,
-  Pie,
-  PieChart,
-  Label as RechartsLabel,
   XAxis,
   YAxis,
 } from "recharts"
@@ -383,12 +380,24 @@ function App() {
                         className="mx-auto h-72 max-w-3xl"
                         initialDimension={{ width: 800, height: 256 }}
                       >
-                        <PieChart accessibilityLayer>
+                        <BarChart
+                          accessibilityLayer
+                          data={pageDonutData}
+                          layout="vertical"
+                          barCategoryGap={12}
+                          margin={{ left: 0, right: 56 }}
+                        >
+                          <XAxis dataKey="seconds" hide type="number" />
+                          <YAxis
+                            dataKey="page"
+                            axisLine={false}
+                            tickLine={false}
+                            type="category"
+                            width={72}
+                          />
                           <ChartTooltip
                             content={
                               <ChartTooltipContent
-                                hideLabel
-                                hideIndicator
                                 formatter={(value, _name, item) => (
                                   <div className="flex min-w-32 items-center gap-2">
                                     <span
@@ -408,45 +417,17 @@ function App() {
                               />
                             }
                           />
-                          <Pie
-                            data={pageDonutData}
-                            dataKey="seconds"
-                            nameKey="page"
-                            innerRadius={68}
-                            outerRadius={104}
-                            paddingAngle={2}
-                          >
-                            <RechartsLabel
-                              content={({ viewBox }) => {
-                                if (!viewBox || !("cx" in viewBox)) return null
-                                const topPage = pageDonutData[0]
-                                return (
-                                  <text
-                                    x={viewBox.cx}
-                                    y={viewBox.cy}
-                                    textAnchor="middle"
-                                    dominantBaseline="middle"
-                                  >
-                                    <tspan
-                                      x={viewBox.cx}
-                                      y={Number(viewBox.cy) - 6}
-                                      className="fill-foreground text-lg font-semibold"
-                                    >
-                                      {topPage.page}
-                                    </tspan>
-                                    <tspan
-                                      x={viewBox.cx}
-                                      y={Number(viewBox.cy) + 16}
-                                      className="fill-muted-foreground"
-                                    >
-                                      {duration(topPage.seconds)}
-                                    </tspan>
-                                  </text>
-                                )
-                              }}
+                          <Bar dataKey="seconds" radius={4}>
+                            {pageDonutData.map((item) => (
+                              <Cell key={item.page} fill={item.fill} />
+                            ))}
+                            <LabelList
+                              dataKey="seconds"
+                              formatter={(value) => duration(Number(value))}
+                              position="right"
                             />
-                          </Pie>
-                        </PieChart>
+                          </Bar>
+                        </BarChart>
                       </ChartContainer>
                     )}
                     {pageDonutData.length > 0 && (
