@@ -174,11 +174,25 @@ def install_startup(source_dir: Path, python: Path | None = None) -> Path:
 def choose_startup_mode(*, default: str = "manual") -> str:
     if not sys.stdin.isatty():
         return default
-    print("How should Resolve Time Tracker start?", flush=True)
-    print("  [1] Manual only (default)", flush=True)
-    print("  [2] Start with my computer", flush=True)
-    answer = input("Choose 1 or 2: ").strip()
-    return "auto" if answer == "2" else "manual"
+    print("Startup behavior:", flush=True)
+    print(
+        "  Yes: start automatically with your computer when DaVinci Resolve is used.",
+        flush=True,
+    )
+    print(
+        "  No: start manually from DaVinci Resolve > Workspace > Scripts > "
+        "ResolveTimeTrackerMenu.",
+        flush=True,
+    )
+    answer = input("Start automatically by default? [y/N]: ").strip().lower()
+    return "auto" if answer in {"y", "yes"} else "manual"
+
+
+def confirm_install(*, default: bool = True) -> bool:
+    if not sys.stdin.isatty():
+        return default
+    answer = input("Do you want to continue? [y/N]: ").strip().lower()
+    return answer in {"y", "yes"}
 
 
 def install_frontend(source_dir: Path) -> None:
@@ -254,6 +268,9 @@ def main() -> int:
     print("  - Install the DaVinci Resolve Scripts menu entry.", flush=True)
     print("  - Ask before enabling background auto-start.", flush=True)
     print("", flush=True)
+    if not confirm_install():
+        print("Install cancelled.")
+        return 0
     ensure_source(source_dir, args.repo_url, update_source)
     uv = ensure_uv()
     install_frontend(source_dir)
