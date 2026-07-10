@@ -6,6 +6,10 @@ const path = require("node:path")
 
 const frontendRoot = path.resolve(__dirname, "..")
 const repoRoot = path.resolve(frontendRoot, "..")
+const appName = "Resolve Time Tracker"
+const appIcon = path.join(frontendRoot, "public", "app-icon.png")
+app.setName(appName)
+app.setAppUserModelId("com.resolve-time-tracker.app")
 let apiPort = Number(
   process.env.RESOLVE_TIME_TRACKER_API_PORT || readArg("--port") || 8765
 )
@@ -159,7 +163,8 @@ function createWindow() {
     height: 720,
     minWidth: 900,
     minHeight: 560,
-    title: "Resolve Time Tracker",
+    title: appName,
+    icon: appIcon,
     backgroundColor: "#ffffff",
     webPreferences: {
       contextIsolation: true,
