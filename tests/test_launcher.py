@@ -20,7 +20,7 @@ class LauncherTest(unittest.TestCase):
         ):
             self.assertEqual(
                 r"C:\Users\Me\AppData\Local\ResolveTimeTracker\tracker.sqlite3",
-                str(default_db_path()),
+                str(default_db_path()).replace("/", "\\"),
             )
 
     def test_default_db_path_uses_macos_application_support(self):
@@ -72,7 +72,7 @@ class LauncherTest(unittest.TestCase):
         with (
             patch("shutil.which", return_value="npm"),
             patch("subprocess.run") as run,
-            patch("scripts.ResolveTimeTracker.os.name", "nt"),
+            patch("scripts.ResolveTimeTracker._is_windows", return_value=True),
             patch.dict(os.environ, {}, clear=True),
         ):
             run.return_value.returncode = 0
@@ -86,14 +86,15 @@ class LauncherTest(unittest.TestCase):
         self.assertIn("--python", command)
         self.assertIn("RESOLVE_TIME_TRACKER_PYTHON", env)
         self.assertEqual(
-            subprocess.CREATE_NO_WINDOW, run.call_args.kwargs["creationflags"]
+            getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            run.call_args.kwargs["creationflags"],
         )
 
     def test_companion_uses_uv_when_current_python_lacks_sidecar_deps(self):
         with (
             patch("shutil.which", return_value="npm"),
             patch("subprocess.run") as run,
-            patch("scripts.ResolveTimeTracker.os.name", "nt"),
+            patch("scripts.ResolveTimeTracker._is_windows", return_value=True),
             patch.dict(os.environ, {}, clear=True),
         ):
             run.side_effect = [
@@ -112,7 +113,7 @@ class LauncherTest(unittest.TestCase):
         with (
             patch("shutil.which", return_value="npm"),
             patch("subprocess.run") as run,
-            patch("scripts.ResolveTimeTracker.os.name", "nt"),
+            patch("scripts.ResolveTimeTracker._is_windows", return_value=True),
             patch(
                 "scripts.ResolveTimeTracker.sys.executable",
                 r"C:\app\.venv\Scripts\pythonw.exe",
