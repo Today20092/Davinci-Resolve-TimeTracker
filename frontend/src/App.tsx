@@ -1,12 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import {
-  Bar,
-  BarChart,
-  Cell,
-  LabelList,
-  XAxis,
-  YAxis,
-} from "recharts"
+import { Bar, BarChart, Cell, LabelList, XAxis, YAxis } from "recharts"
 import {
   IconDeviceFloppy,
   IconDownload,
@@ -28,7 +21,11 @@ import {
   type Settings,
   type Status,
 } from "@/lib/api"
-import { currentProjectDashboard, projectExportSummary } from "@/lib/dashboard"
+import {
+  currentProjectDashboard,
+  displayPage,
+  projectExportSummary,
+} from "@/lib/dashboard"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -80,10 +77,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  ToggleGroup,
-  ToggleGroupItem,
-} from "@/components/ui/toggle-group"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 
 const emptyStatus: Status = {
   connection: "waiting",
@@ -283,7 +277,10 @@ function App() {
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <StatusBadge value={status.connection} />
               <TrackingBadge live={isLive} enabled={status.tracking_enabled} />
-              <InfoBadge label="Page" value={status.page} />
+              <InfoBadge
+                label="Page"
+                value={displayPage(status.page, status.state)}
+              />
               {isLive && (
                 <InfoBadge label="Session" value={status.active_elapsed} />
               )}
@@ -550,7 +547,9 @@ function App() {
                           {friendlyDateTime(session.ended_at_utc)}
                         </TableCell>
                         <TableCell>{session.duration}</TableCell>
-                        <TableCell>{session.page}</TableCell>
+                        <TableCell>
+                          {displayPage(session.page, session.activity_category)}
+                        </TableCell>
                         <TableCell>{session.activity_category}</TableCell>
                         <TableCell>
                           <Button
@@ -755,53 +754,53 @@ function App() {
                               >
                                 <BarChart
                                   accessibilityLayer
-                                    data={activityChartData}
-                                    margin={{ top: 24, right: 8, left: 8 }}
-                                  >
-                                    <XAxis
-                                      dataKey="label"
-                                      axisLine={false}
-                                      tickLine={false}
-                                    />
-                                    <YAxis hide type="number" />
-                                    <ChartTooltip
-                                      content={
-                                        <ChartTooltipContent
-                                          hideLabel
-                                          formatter={(value, _name, item) => (
-                                            <div className="flex min-w-32 items-center gap-2">
-                                              <span
-                                                className="size-2.5 shrink-0 rounded-sm"
-                                                style={{
-                                                  backgroundColor:
-                                                    item.payload.fill,
-                                                }}
-                                              />
-                                              <span>{item.payload.label}</span>
-                                              <span className="ml-auto font-mono font-medium">
-                                                {duration(Number(value))}
-                                              </span>
-                                            </div>
-                                          )}
-                                        />
-                                      }
-                                    />
-                                    <Bar dataKey="seconds" radius={4}>
-                                      {activityChartData.map((item) => (
-                                        <Cell
-                                          key={item.activity}
-                                          fill={item.fill}
-                                        />
-                                      ))}
-                                      <LabelList
-                                        dataKey="seconds"
-                                        formatter={(value) =>
-                                          duration(Number(value))
-                                        }
-                                        position="top"
+                                  data={activityChartData}
+                                  margin={{ top: 24, right: 8, left: 8 }}
+                                >
+                                  <XAxis
+                                    dataKey="label"
+                                    axisLine={false}
+                                    tickLine={false}
+                                  />
+                                  <YAxis hide type="number" />
+                                  <ChartTooltip
+                                    content={
+                                      <ChartTooltipContent
+                                        hideLabel
+                                        formatter={(value, _name, item) => (
+                                          <div className="flex min-w-32 items-center gap-2">
+                                            <span
+                                              className="size-2.5 shrink-0 rounded-sm"
+                                              style={{
+                                                backgroundColor:
+                                                  item.payload.fill,
+                                              }}
+                                            />
+                                            <span>{item.payload.label}</span>
+                                            <span className="ml-auto font-mono font-medium">
+                                              {duration(Number(value))}
+                                            </span>
+                                          </div>
+                                        )}
                                       />
-                                    </Bar>
-                                  </BarChart>
+                                    }
+                                  />
+                                  <Bar dataKey="seconds" radius={4}>
+                                    {activityChartData.map((item) => (
+                                      <Cell
+                                        key={item.activity}
+                                        fill={item.fill}
+                                      />
+                                    ))}
+                                    <LabelList
+                                      dataKey="seconds"
+                                      formatter={(value) =>
+                                        duration(Number(value))
+                                      }
+                                      position="top"
+                                    />
+                                  </Bar>
+                                </BarChart>
                               </ChartContainer>
                             )}
                           </CardContent>
@@ -1065,7 +1064,9 @@ function ActivityTable({ sessions }: { sessions: Session[] }) {
           <TableRow key={session.id}>
             <TableCell>{friendlyDateTime(session.started_at_utc)}</TableCell>
             <TableCell>{session.duration}</TableCell>
-            <TableCell>{session.page}</TableCell>
+            <TableCell>
+              {displayPage(session.page, session.activity_category)}
+            </TableCell>
             <TableCell>{session.activity_category}</TableCell>
           </TableRow>
         ))}

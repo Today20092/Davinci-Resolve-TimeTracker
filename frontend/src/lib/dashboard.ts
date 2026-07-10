@@ -46,7 +46,8 @@ export function currentProjectDashboard(
     trackedSeconds += seconds
     sessionCount += 1
     if (startedAt.startsWith(today)) todaySeconds += seconds
-    pageTotals.set(page || "Unknown", (pageTotals.get(page) ?? 0) + seconds)
+    const pageLabel = displayPage(page, category)
+    pageTotals.set(pageLabel, (pageTotals.get(pageLabel) ?? 0) + seconds)
     if (category === "editing") editingSeconds += seconds
     if (category === "rendering") renderingSeconds += seconds
   }
@@ -141,4 +142,14 @@ function formatDate(value: string) {
   )
   if (Number.isNaN(date.getTime())) return value.split("T")[0]
   return date.toLocaleDateString("en-US")
+}
+
+export function displayPage(page: string, category: string) {
+  if (
+    category === "rendering" &&
+    (!page || page === "Unknown" || page === "none")
+  ) {
+    return "Render/Export"
+  }
+  return page || "Unknown"
 }
