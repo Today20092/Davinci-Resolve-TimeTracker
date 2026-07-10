@@ -1,5 +1,7 @@
 # Resolve Time Tracker
 
+> **Work in progress:** Resolve Time Tracker is working, but it is still evolving. Clone it, fork it, modify it for your own DaVinci Resolve workflow, and open pull requests if you build something useful.
+
 [![DaVinci Resolve](https://img.shields.io/badge/DaVinci_Resolve-Studio-233A51?style=for-the-badge&logo=davinciresolve&logoColor=white)](https://www.blackmagicdesign.com/products/davinciresolve)
 [![Python](https://img.shields.io/badge/Python-3.10--3.13-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-sidecar-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -77,6 +79,30 @@ The companion window shows tracking status, current project, current page, activ
 If you opted into background startup during install, the tracker starts with your computer and records Resolve activity even when the companion window is closed.
 
 CSV export writes closed sessions only. Open active sessions are exported after they close.
+
+## Screenshots
+
+These screenshots use sample project data to show the companion app pages.
+
+### Dashboard
+
+![Dashboard showing current Resolve project, tracked time, page chart, and recent activity](docs/screenshots/dashboard.png)
+
+### Projects
+
+![Projects table showing tracked Resolve projects and total time](docs/screenshots/projects.png)
+
+### Page Activity
+
+![Page activity table showing saved Resolve page sessions](docs/screenshots/page-activity.png)
+
+### Export
+
+![Export page showing CSV and PDF report options](docs/screenshots/export.png)
+
+### Settings
+
+![Settings page showing idle timeout and theme controls](docs/screenshots/settings.png)
 
 ## How Tracking Works
 
