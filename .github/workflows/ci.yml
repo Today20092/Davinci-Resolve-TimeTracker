@@ -21,3 +21,18 @@ jobs:
         run: uv run ruff check .
       - name: Test
         run: uv run -m unittest discover -s tests
+      - name: Frontend install
+        working-directory: frontend
+        run: npm ci
+      - name: Frontend lint
+        working-directory: frontend
+        run: npm run lint
+      - name: Frontend typecheck
+        working-directory: frontend
+        run: npm run typecheck
+      - name: Frontend test
+        working-directory: frontend
+        run: npm test
+      - name: Frontend build
+        working-directory: frontend
+        run: npm run build
