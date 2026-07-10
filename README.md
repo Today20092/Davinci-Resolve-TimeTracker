@@ -86,23 +86,23 @@ These screenshots use sample project data to show the companion app pages.
 
 ### Dashboard
 
-![Dashboard showing current Resolve project, tracked time, page chart, and recent activity](docs/screenshots/dashboard.png)
+<img src="docs/screenshots/dashboard.png" alt="Dashboard showing current Resolve project, tracked time, page chart, and recent activity" width="720">
 
 ### Projects
 
-![Projects table showing tracked Resolve projects and total time](docs/screenshots/projects.png)
+<img src="docs/screenshots/projects.png" alt="Projects table showing tracked Resolve projects and total time" width="720">
 
 ### Page Activity
 
-![Page activity table showing saved Resolve page sessions](docs/screenshots/page-activity.png)
+<img src="docs/screenshots/page-activity.png" alt="Page activity table showing saved Resolve page sessions" width="720">
 
 ### Export
 
-![Export page showing CSV and PDF report options](docs/screenshots/export.png)
+<img src="docs/screenshots/export.png" alt="Export page showing CSV and PDF report options" width="720">
 
 ### Settings
 
-![Settings page showing idle timeout and theme controls](docs/screenshots/settings.png)
+<img src="docs/screenshots/settings.png" alt="Settings page showing idle timeout and theme controls" width="720">
 
 ## How Tracking Works
 
