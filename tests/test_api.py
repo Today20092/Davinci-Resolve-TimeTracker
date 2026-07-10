@@ -2,10 +2,11 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from resolve_time_tracker.api import create_app
+from resolve_time_tracker.api import create_app, run_api
 from resolve_time_tracker.database import SQLiteStore
 from resolve_time_tracker.tracking_engine import RuntimeSnapshot, TrackingEngine
 
@@ -129,6 +130,26 @@ class ApiTest(unittest.TestCase):
                 )
 
         self.assertEqual("*", response.headers["access-control-allow-origin"])
+
+    def test_run_api_starts_tracking_api_with_resolve_bridge(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("resolve_time_tracker.api.TrackingEngine") as engine, patch(
+                "resolve_time_tracker.resolve_bridge.ResolveBridge"
+            ) as bridge, patch("uvicorn.run") as run:
+                run_api(Path(tmp) / "tracker.sqlite3")
+
+        app = run.call_args.args[0]
+        self.assertIs(app.state.api.tracking_engine, engine.return_value)
+        engine.assert_called_once()
+        bridge.assert_called_once()
+
+    def test_run_api_can_start_database_api_without_resolve_bridge(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("uvicorn.run") as run:
+                run_api(Path(tmp) / "tracker.sqlite3", enable_tracking=False)
+
+        app = run.call_args.args[0]
+        self.assertIsNone(app.state.api.tracking_engine)
 
 
 if __name__ == "__main__":

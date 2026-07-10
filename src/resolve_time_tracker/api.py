@@ -16,7 +16,6 @@ from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
 from resolve_time_tracker.database import SQLiteStore
-from resolve_time_tracker.resolve_bridge import ResolveBridge
 from resolve_time_tracker.tracking_engine import TrackingEngine
 
 
@@ -277,13 +276,25 @@ def create_app(
     return app
 
 
-def run_api(db_path: str | Path, *, host: str = "127.0.0.1", port: int = 8765) -> None:
+def run_api(
+    db_path: str | Path,
+    *,
+    host: str = "127.0.0.1",
+    port: int = 8765,
+    enable_tracking: bool = True,
+) -> None:
     import uvicorn
 
     store = SQLiteStore(db_path, check_same_thread=False)
     try:
-        engine = TrackingEngine(store, snapshot_provider=ResolveBridge())
-        uvicorn.run(create_app(store, tracking_engine=engine), host=host, port=port)
+        tracking_engine = None
+        if enable_tracking:
+            from resolve_time_tracker.resolve_bridge import ResolveBridge
+
+            tracking_engine = TrackingEngine(store, snapshot_provider=ResolveBridge())
+        uvicorn.run(
+            create_app(store, tracking_engine=tracking_engine), host=host, port=port
+        )
     finally:
         store.close()
 
