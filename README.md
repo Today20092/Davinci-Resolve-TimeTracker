@@ -114,19 +114,53 @@ The platform installer:
 
 ```mermaid
 flowchart LR
-  User["Editor in DaVinci Resolve"] --> Menu["Resolve Scripts menu<br/>ResolveTimeTrackerMenu.py"]
+  User["Editor"] --> Menu["Resolve Scripts menu<br/>ResolveTimeTrackerMenu.py"]
   Menu --> Entry["scripts/ResolveTimeTracker.py<br/>--companion"]
-  Entry --> Electron["Electron desktop shell<br/>frontend/electron/main.cjs"]
-  Electron --> Sidecar["Python sidecar<br/>FastAPI localhost API"]
-  Electron --> React["React dashboard<br/>Vite + shadcn/ui"]
+
+  subgraph Desktop["Desktop companion"]
+    Electron["Electron shell<br/>frontend/electron/main.cjs"]
+    React["React dashboard<br/>Vite + shadcn/ui"]
+  end
+
+  subgraph Backend["Local Python sidecar"]
+    Sidecar["FastAPI localhost API"]
+    Engine["TrackingEngine<br/>billable Session rules"]
+    Bridge["ResolveBridge<br/>project, page, render state"]
+    Activity["Activity probe<br/>idle + foreground checks"]
+  end
+
+  subgraph Resolve["DaVinci Resolve Studio"]
+    ResolveApi["Resolve scripting API"]
+  end
+
+  subgraph Data["Local data"]
+    Store["SQLiteStore<br/>projects, sessions, settings"]
+    Csv["CSV export"]
+  end
+
+  Entry --> Electron
+  Electron --> Sidecar
+  Electron --> React
   React <-->|REST + server-sent events| Sidecar
-  Sidecar --> Engine["TrackingEngine<br/>billable Session rules"]
-  Engine --> Bridge["ResolveBridge<br/>Resolve project, Page, render state"]
-  Bridge --> Resolve["DaVinci Resolve scripting API"]
-  Engine --> Activity["Activity probe<br/>idle + foreground checks"]
-  Engine --> Store["SQLiteStore<br/>Projects, Sessions, settings"]
-  React --> Csv["CSV export"]
+  Sidecar --> Engine
+  Engine --> Bridge
+  Bridge --> ResolveApi
+  Engine --> Activity
+  Engine --> Store
+  React --> Csv
   Csv --> Store
+
+  classDef user fill:#fff7ed,stroke:#f97316,color:#7c2d12
+  classDef resolve fill:#eff6ff,stroke:#2563eb,color:#1e3a8a
+  classDef desktop fill:#f0fdf4,stroke:#16a34a,color:#14532d
+  classDef backend fill:#eef2ff,stroke:#4f46e5,color:#312e81
+  classDef data fill:#fdf2f8,stroke:#db2777,color:#831843
+
+  class User user
+  class Menu,Entry,ResolveApi resolve
+  class Electron,React desktop
+  class Sidecar,Engine,Bridge,Activity backend
+  class Store,Csv data
 ```
 
 ```mermaid
@@ -138,6 +172,14 @@ flowchart TD
   Installer --> MenuInstall["scripts/install_resolve_menu.py"]
   MenuInstall --> Launcher["Resolve Scripts/Utility<br/>ResolveTimeTrackerMenu.py"]
   Launcher --> Companion["Launch --companion from this checkout"]
+
+  classDef bootstrap fill:#fff7ed,stroke:#f97316,color:#7c2d12
+  classDef setup fill:#eef2ff,stroke:#4f46e5,color:#312e81
+  classDef resolve fill:#eff6ff,stroke:#2563eb,color:#1e3a8a
+
+  class Install,Installer bootstrap
+  class Source,Python,Frontend setup
+  class MenuInstall,Launcher,Companion resolve
 ```
 
 | Area | Files | Responsibility |
