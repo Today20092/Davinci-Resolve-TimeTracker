@@ -130,9 +130,8 @@ function createWindow() {
     win.webContents.once("dom-ready", async () => {
       await new Promise((resolve) => setTimeout(resolve, 500))
       const result = await win.webContents.executeJavaScript(`
-          document.body.innerText.includes("Resolve Time Tracker") &&
           document.body.innerText.includes("Dashboard") &&
-          document.body.innerText.includes("Sessions")
+          document.body.innerText.includes("Page activity")
         `)
       clearTimeout(timer)
       finishSmoke(result)

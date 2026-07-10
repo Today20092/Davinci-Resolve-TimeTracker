@@ -1,5 +1,14 @@
 # Resolve Time Tracker
 
+[![DaVinci Resolve](https://img.shields.io/badge/DaVinci_Resolve-Studio-233A51?style=for-the-badge&logo=davinciresolve&logoColor=white)](https://www.blackmagicdesign.com/products/davinciresolve)
+[![Python](https://img.shields.io/badge/Python-3.10--3.13-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-sidecar-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Electron](https://img.shields.io/badge/Electron-desktop-47848F?style=for-the-badge&logo=electron&logoColor=white)](https://www.electronjs.org/)
+[![React](https://img.shields.io/badge/React-interface-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://react.dev/)
+[![shadcn/ui](https://img.shields.io/badge/shadcn%2Fui-components-000000?style=for-the-badge&logo=shadcnui&logoColor=white)](https://ui.shadcn.com/)
+[![SQLite](https://img.shields.io/badge/SQLite-local_storage-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
+[![MIT License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
+
 Resolve Time Tracker is an MIT-licensed, open-source time tracker for DaVinci Resolve Studio. It tracks billable editing time per Resolve project while avoiding the classic mistake: counting time after the editor has walked away.
 
 ## Install
@@ -105,6 +114,46 @@ The platform installer:
 - Installs and builds the Electron companion UI from `frontend/`.
 - Installs `ResolveTimeTrackerMenu.py` into Resolve's Scripts/Utility folder.
 - Verifies the Resolve menu script points at this checkout.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  User["Editor in DaVinci Resolve"] --> Menu["Resolve Scripts menu<br/>ResolveTimeTrackerMenu.py"]
+  Menu --> Entry["scripts/ResolveTimeTracker.py<br/>--companion"]
+  Entry --> Electron["Electron desktop shell<br/>frontend/electron/main.cjs"]
+  Electron --> Sidecar["Python sidecar<br/>FastAPI localhost API"]
+  Electron --> React["React dashboard<br/>Vite + shadcn/ui"]
+  React <-->|REST + server-sent events| Sidecar
+  Sidecar --> Engine["TrackingEngine<br/>billable Session rules"]
+  Engine --> Bridge["ResolveBridge<br/>Resolve project, Page, render state"]
+  Bridge --> Resolve["DaVinci Resolve scripting API"]
+  Engine --> Activity["Activity probe<br/>idle + foreground checks"]
+  Engine --> Store["SQLiteStore<br/>Projects, Sessions, settings"]
+  React --> Csv["CSV export"]
+  Csv --> Store
+```
+
+```mermaid
+flowchart TD
+  Install["install.ps1 / install.sh"] --> Installer["install.py"]
+  Installer --> Source["Find or clone source checkout"]
+  Installer --> Python["uv sync --python 3.13"]
+  Installer --> Frontend["npm ci + npm run build"]
+  Installer --> MenuInstall["scripts/install_resolve_menu.py"]
+  MenuInstall --> Launcher["Resolve Scripts/Utility<br/>ResolveTimeTrackerMenu.py"]
+  Launcher --> Companion["Launch --companion from this checkout"]
+```
+
+| Area | Files | Responsibility |
+| --- | --- | --- |
+| Plugin entry | `scripts/ResolveTimeTracker.py` | Chooses launcher mode: Resolve UI, Electron companion, FastAPI sidecar, or version output. |
+| Install path | `install.py`, `install.ps1`, `install.sh`, `scripts/install_resolve_menu.py` | Prepares Python and frontend dependencies, then installs the Resolve Scripts-menu launcher. |
+| Interface | `frontend/` | Electron opens the desktop window; React, Vite, Tailwind, and shadcn/ui render status, history, settings, edits, and CSV export. |
+| Backend API | `src/resolve_time_tracker/api.py` | FastAPI exposes localhost REST endpoints and server-sent live status events. |
+| Tracking rules | `src/resolve_time_tracker/tracking_engine.py` | Converts Resolve/runtime snapshots into billable Sessions with heartbeats. |
+| Resolve adapter | `src/resolve_time_tracker/resolve_bridge.py` | Reads project, Page, render, timeline, idle, and foreground state. |
+| Storage | `src/resolve_time_tracker/database.py` | Stores Projects, active Session, closed Sessions, settings, heartbeat recovery, summaries, and CSV output in SQLite. |
 
 ## Development
 

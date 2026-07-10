@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react"
+import { Bar, BarChart, LabelList, XAxis, YAxis } from "recharts"
 import {
-  DownloadIcon,
-  PauseIcon,
-  PencilIcon,
-  PlayIcon,
-  RefreshCwIcon,
-  SaveIcon,
-} from "lucide-react"
+  IconDeviceFloppy,
+  IconDownload,
+  IconFolderOpen,
+  IconPencil,
+  IconPlayerPause,
+  IconPlayerPlay,
+  IconRefresh,
+} from "@tabler/icons-react"
 
 import {
   createSidecarClient,
@@ -17,6 +19,7 @@ import {
   type Settings,
   type Status,
 } from "@/lib/api"
+import { currentProjectDashboard } from "@/lib/dashboard"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -28,6 +31,12 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import {
+  type ChartConfig,
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart"
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -35,6 +44,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -70,6 +86,10 @@ const emptyStatus: Status = {
 const sidecar = createSidecarClient()
 type Dashboard = Awaited<ReturnType<typeof sidecar.loadDashboard>>
 
+const pageChartConfig = {
+  seconds: { label: "Tracked time", color: "var(--chart-1)" },
+} satisfies ChartConfig
+
 function App() {
   const [status, setStatus] = useState<Status>(emptyStatus)
   const [projects, setProjects] = useState<ProjectSummary[]>([])
@@ -78,6 +98,7 @@ function App() {
   const [selectedSession, setSelectedSession] = useState<Session | null>(null)
   const [editForm, setEditForm] = useState<SessionUpdate | null>(null)
   const [idleMinutes, setIdleMinutes] = useState("5")
+  const [theme, setTheme] = useState(() => localStorage.theme || "light")
   const [error, setError] = useState<string | null>(null)
 
   function applyDashboard(dashboard: Dashboard) {
@@ -104,6 +125,11 @@ function App() {
     })
   }, [])
 
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark")
+    localStorage.theme = theme
+  }, [theme])
+
   const totals = useMemo(() => {
     const seconds = projects.reduce(
       (sum, project) => sum + project.duration_seconds,
@@ -118,6 +144,17 @@ function App() {
       duration: duration(seconds),
     }
   }, [projects])
+
+  const projectDashboard = useMemo(
+    () => currentProjectDashboard(sessions, status),
+    [sessions, status]
+  )
+
+  const pageChartData = projectDashboard.pageData
+
+  const projectName =
+    status.project === "none" ? "No Resolve project detected" : status.project
+  const isLive = status.state === "editing" || status.state === "rendering"
 
   async function runAction(action: () => Promise<Dashboard>) {
     try {
@@ -159,15 +196,13 @@ function App() {
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 p-4 lg:p-6">
         <header className="flex flex-col gap-3 border-b pb-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 flex-col gap-1">
-            <h1 className="truncate text-xl font-semibold">
-              Resolve Time Tracker
-            </h1>
+            <h1 className="truncate text-xl font-semibold">{projectName}</h1>
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <StatusBadge value={status.connection} />
-              <span className="truncate">Project: {status.project}</span>
+              <TrackingBadge live={isLive} enabled={status.tracking_enabled} />
               <span>Page: {status.page}</span>
-              <span>State: {status.state}</span>
-              <span>Heartbeat: {status.heartbeat}</span>
+              <span>Elapsed: {status.active_elapsed}</span>
+              <span>Signal: {status.heartbeat}</span>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -178,9 +213,9 @@ function App() {
               }
             >
               {status.tracking_enabled ? (
-                <PauseIcon data-icon="inline-start" />
+                <IconPlayerPause data-icon="inline-start" />
               ) : (
-                <PlayIcon data-icon="inline-start" />
+                <IconPlayerPlay data-icon="inline-start" />
               )}
               {status.tracking_enabled ? "Pause Tracking" : "Resume Tracking"}
             </Button>
@@ -190,7 +225,7 @@ function App() {
               aria-label="Refresh"
               onClick={() => runAction(() => sidecar.refresh())}
             >
-              <RefreshCwIcon />
+              <IconRefresh />
             </Button>
           </div>
         </header>
@@ -205,34 +240,112 @@ function App() {
           <TabsList>
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
             <TabsTrigger value="projects">Projects</TabsTrigger>
-            <TabsTrigger value="sessions">Sessions</TabsTrigger>
+            <TabsTrigger value="sessions">Page activity</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
 
           <TabsContent value="dashboard" className="flex flex-col gap-4">
-            <div className="grid gap-3 md:grid-cols-3">
-              <Metric title="Active elapsed" value={status.active_elapsed} />
-              <Metric title="Projects" value={String(totals.projects)} />
-              <Metric title="Total tracked" value={totals.duration} />
-            </div>
-            <Card>
-              <CardHeader>
-                <CardTitle>Current Session</CardTitle>
-                <CardDescription>
-                  {status.db_path || "Database pending"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <dl className="grid gap-3 text-sm md:grid-cols-2 lg:grid-cols-3">
-                  <Field label="Connection" value={status.connection} />
-                  <Field label="Project" value={status.project} />
-                  <Field label="Page" value={status.page} />
-                  <Field label="Tracking state" value={status.state} />
-                  <Field label="Active elapsed" value={status.active_elapsed} />
-                  <Field label="Last heartbeat" value={status.heartbeat} />
-                </dl>
-              </CardContent>
-            </Card>
+            {!projectDashboard.project ? (
+              <Empty className="min-h-96 rounded-lg border">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <IconFolderOpen />
+                  </EmptyMedia>
+                  <EmptyTitle>No Resolve project detected</EmptyTitle>
+                  <EmptyDescription>
+                    Open a project in Resolve and the dashboard will switch to
+                    its tracked time.
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            ) : (
+              <>
+                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                  <Metric
+                    title="Tracked today"
+                    value={duration(projectDashboard.todaySeconds)}
+                  />
+                  <Metric
+                    title="Project total"
+                    value={duration(projectDashboard.trackedSeconds)}
+                  />
+                  <Metric
+                    title="Render time"
+                    value={duration(projectDashboard.renderingSeconds)}
+                  />
+                  <Metric
+                    title="Last activity"
+                    value={friendlyDateTime(projectDashboard.lastActivity)}
+                  />
+                </div>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Time by page</CardTitle>
+                    <CardDescription>
+                      {projectDashboard.project} -{" "}
+                      {projectDashboard.sessionCount} page activity rows
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {pageChartData.length === 0 ? (
+                      <ChartEmpty />
+                    ) : (
+                      <ChartContainer
+                        config={pageChartConfig}
+                        className="h-64 w-full"
+                        initialDimension={{ width: 800, height: 256 }}
+                      >
+                        <BarChart
+                          accessibilityLayer
+                          data={pageChartData}
+                          layout="vertical"
+                          barCategoryGap={12}
+                          margin={{ left: 0, right: 48 }}
+                        >
+                          <XAxis dataKey="seconds" hide type="number" />
+                          <YAxis
+                            dataKey="page"
+                            axisLine={false}
+                            tickLine={false}
+                            type="category"
+                            width={64}
+                          />
+                          <ChartTooltip
+                            content={
+                              <ChartTooltipContent
+                                formatter={(value) => duration(Number(value))}
+                              />
+                            }
+                          />
+                          <Bar
+                            dataKey="seconds"
+                            fill="var(--color-seconds)"
+                            radius={4}
+                          >
+                            <LabelList
+                              dataKey="seconds"
+                              formatter={(value) => duration(Number(value))}
+                              position="right"
+                            />
+                          </Bar>
+                        </BarChart>
+                      </ChartContainer>
+                    )}
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Recent page activity</CardTitle>
+                    <CardDescription>
+                      Latest rows saved for this project.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ActivityTable sessions={projectDashboard.recentSessions} />
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </TabsContent>
 
           <TabsContent value="projects">
@@ -276,13 +389,13 @@ function App() {
           <TabsContent value="sessions">
             <Card>
               <CardHeader>
-                <CardTitle>Sessions</CardTitle>
+                <CardTitle>Page activity</CardTitle>
                 <CardDescription>
-                  {sessions.length} saved sessions
+                  {sessions.length} saved page activity rows
                 </CardDescription>
                 <CardAction>
                   <Button variant="outline" onClick={exportCsv}>
-                    <DownloadIcon data-icon="inline-start" />
+                    <IconDownload data-icon="inline-start" />
                     Export CSV
                   </Button>
                 </CardAction>
@@ -309,9 +422,11 @@ function App() {
                           {session.project_name}
                         </TableCell>
                         <TableCell>
-                          {shortDate(session.started_at_utc)}
+                          {friendlyDateTime(session.started_at_utc)}
                         </TableCell>
-                        <TableCell>{shortDate(session.ended_at_utc)}</TableCell>
+                        <TableCell>
+                          {friendlyDateTime(session.ended_at_utc)}
+                        </TableCell>
                         <TableCell>{session.duration}</TableCell>
                         <TableCell>{session.page}</TableCell>
                         <TableCell>{session.activity_category}</TableCell>
@@ -322,7 +437,7 @@ function App() {
                             aria-label="Edit session"
                             onClick={() => startEditing(session)}
                           >
-                            <PencilIcon />
+                            <IconPencil />
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -354,10 +469,22 @@ function App() {
                       onChange={(event) => setIdleMinutes(event.target.value)}
                     />
                     <Button onClick={saveSettings}>
-                      <SaveIcon data-icon="inline-start" />
+                      <IconDeviceFloppy data-icon="inline-start" />
                       Save
                     </Button>
                   </div>
+                  <Label htmlFor="theme">Theme</Label>
+                  <Select value={theme} onValueChange={setTheme}>
+                    <SelectTrigger id="theme" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="light">Light</SelectItem>
+                        <SelectItem value="dark">Dark</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
                 </div>
               </CardContent>
             </Card>
@@ -376,7 +503,7 @@ function App() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Session</DialogTitle>
+            <DialogTitle>Edit page activity</DialogTitle>
             <DialogDescription>
               {selectedSession?.project_name ?? "Session"}
             </DialogDescription>
@@ -384,14 +511,14 @@ function App() {
           {editForm && (
             <div className="grid gap-3">
               <LabeledInput
-                label="Started at UTC"
+                label="Started"
                 value={editForm.started_at_utc}
                 onChange={(value) =>
                   setEditForm({ ...editForm, started_at_utc: value })
                 }
               />
               <LabeledInput
-                label="Ended at UTC"
+                label="Ended"
                 value={editForm.ended_at_utc}
                 onChange={(value) =>
                   setEditForm({ ...editForm, ended_at_utc: value })
@@ -429,7 +556,7 @@ function App() {
               Cancel
             </Button>
             <Button onClick={saveSession}>
-              <SaveIcon data-icon="inline-start" />
+              <IconDeviceFloppy data-icon="inline-start" />
               Save
             </Button>
           </DialogFooter>
@@ -440,8 +567,39 @@ function App() {
 }
 
 function StatusBadge({ value }: { value: string }) {
-  const variant = value === "connected" ? "secondary" : "destructive"
-  return <Badge variant={variant}>{value}</Badge>
+  const connected = value === "connected"
+  return (
+    <Badge
+      className={
+        connected
+          ? "border-emerald-200 bg-emerald-100 text-emerald-800"
+          : "border-red-200 bg-red-100 text-red-800"
+      }
+    >
+      {connected ? "Connected" : "Not connected"}
+    </Badge>
+  )
+}
+
+function TrackingBadge({ live, enabled }: { live: boolean; enabled: boolean }) {
+  if (!enabled) {
+    return (
+      <Badge className="border-amber-200 bg-amber-100 text-amber-800">
+        Tracking paused
+      </Badge>
+    )
+  }
+  return (
+    <Badge
+      className={
+        live
+          ? "border-sky-200 bg-sky-100 text-sky-800"
+          : "border-zinc-200 bg-zinc-100 text-zinc-700"
+      }
+    >
+      {live ? "Tracking now" : "Waiting for activity"}
+    </Badge>
+  )
 }
 
 function Metric({ title, value }: { title: string; value: string }) {
@@ -455,12 +613,42 @@ function Metric({ title, value }: { title: string; value: string }) {
   )
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+function ActivityTable({ sessions }: { sessions: Session[] }) {
   return (
-    <div className="flex flex-col gap-1 rounded-lg border p-3">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="truncate font-medium">{value}</dd>
-    </div>
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Start</TableHead>
+          <TableHead>Duration</TableHead>
+          <TableHead>Page</TableHead>
+          <TableHead>Activity</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {sessions.map((session) => (
+          <TableRow key={session.id}>
+            <TableCell>{friendlyDateTime(session.started_at_utc)}</TableCell>
+            <TableCell>{session.duration}</TableCell>
+            <TableCell>{session.page}</TableCell>
+            <TableCell>{session.activity_category}</TableCell>
+          </TableRow>
+        ))}
+        {sessions.length === 0 && <EmptyRow columns={4} />}
+      </TableBody>
+    </Table>
+  )
+}
+
+function ChartEmpty() {
+  return (
+    <Empty className="min-h-72">
+      <EmptyHeader>
+        <EmptyTitle>No tracked time yet</EmptyTitle>
+        <EmptyDescription>
+          Time will appear here once tracking records this project.
+        </EmptyDescription>
+      </EmptyHeader>
+    </Empty>
   )
 }
 
@@ -501,6 +689,19 @@ function LabeledInput({
 
 function shortDate(value: string) {
   return value.replace("T", " ").replace("Z", "")
+}
+
+function friendlyDateTime(value: string) {
+  if (!value || value === "none") return "None yet"
+  const normalized = value.includes("T") ? value : value.replace(" ", "T")
+  const date = new Date(normalized.endsWith("Z") ? normalized : `${normalized}Z`)
+  if (Number.isNaN(date.getTime())) return shortDate(value).split(".")[0]
+  return date.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  })
 }
 
 function duration(seconds: number) {
