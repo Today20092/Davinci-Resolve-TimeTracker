@@ -48,6 +48,10 @@ class ApiTest(unittest.TestCase):
                 sessions = client.get("/sessions").json()
                 settings = client.get("/settings").json()
                 csv_text = client.get("/export.csv").text
+                pdf = client.post(
+                    "/export.pdf",
+                    json={"project_name": "Project A", "show_recent_activity": False},
+                )
 
         self.assertEqual("paused", status["state"])
         self.assertEqual("none", status["project"])
@@ -58,6 +62,23 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(3600, sessions[0]["duration_seconds"])
         self.assertIn("session_id,project_name,date", csv_text)
         self.assertIn("Project A", csv_text)
+        self.assertEqual("application/pdf", pdf.headers["content-type"])
+        self.assertTrue(pdf.content.startswith(b"%PDF"))
+        self.assertIn("Project-A-time-report.pdf", pdf.headers["content-disposition"])
+
+    def test_pdf_export_rejects_unknown_project(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with SQLiteStore(
+                Path(tmp) / "tracker.sqlite3", check_same_thread=False
+            ) as store:
+                app = create_app(store, now=lambda: utc(11))
+                client = TestClient(app)
+
+                response = client.post(
+                    "/export.pdf", json={"project_name": "Missing Project"}
+                )
+
+        self.assertEqual(404, response.status_code)
 
     def test_tracking_controls_and_mutations(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -133,9 +154,11 @@ class ApiTest(unittest.TestCase):
 
     def test_run_api_starts_tracking_api_with_resolve_bridge(self):
         with tempfile.TemporaryDirectory() as tmp:
-            with patch("resolve_time_tracker.api.TrackingEngine") as engine, patch(
-                "resolve_time_tracker.resolve_bridge.ResolveBridge"
-            ) as bridge, patch("uvicorn.run") as run:
+            with (
+                patch("resolve_time_tracker.api.TrackingEngine") as engine,
+                patch("resolve_time_tracker.resolve_bridge.ResolveBridge") as bridge,
+                patch("uvicorn.run") as run,
+            ):
                 run_api(Path(tmp) / "tracker.sqlite3")
 
         app = run.call_args.args[0]

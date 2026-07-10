@@ -175,6 +175,35 @@ test("loads Session history and exposes the CSV export location", async () => {
   assert.equal(client.csvExportUrl(), "http://sidecar.test/export.csv")
 })
 
+test("exports a configured PDF report", async () => {
+  const requests = []
+  const client = createSidecarClient({
+    baseUrl: "http://sidecar.test",
+    fetch: async (url, init = {}) => {
+      requests.push({
+        path: new URL(url).pathname,
+        method: init.method,
+        body: JSON.parse(init.body),
+      })
+      return new Response(new Blob(["pdf"]))
+    },
+  })
+  const options = {
+    project_name: "Demo",
+    show_totals: true,
+    show_page_chart: false,
+    show_activity_chart: true,
+    show_recent_activity: false,
+  }
+
+  const blob = await client.exportPdf(options)
+
+  assert.equal(blob.size, 3)
+  assert.deepEqual(requests, [
+    { path: "/export.pdf", method: "POST", body: options },
+  ])
+})
+
 test("normalizes sidecar errors for presentation", () => {
   assert.equal(
     formatSidecarError(new Error("sidecar failed")),

@@ -16,6 +16,7 @@ from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
 from resolve_time_tracker.database import SQLiteStore
+from resolve_time_tracker.pdf_export import PdfExportOptions, build_project_pdf
 from resolve_time_tracker.tracking_engine import TrackingEngine
 
 
@@ -31,6 +32,14 @@ class SessionUpdate(BaseModel):
     ended_at_utc: str
     page: str
     activity_category: str
+
+
+class PdfExportRequest(BaseModel):
+    project_name: str
+    show_totals: bool = True
+    show_page_chart: bool = True
+    show_activity_chart: bool = True
+    show_recent_activity: bool = True
 
 
 class ApiState:
@@ -126,6 +135,27 @@ class ApiState:
             output = StringIO()
             self.store.write_csv(output)
             return output.getvalue()
+
+    def pdf(self, request: PdfExportRequest) -> bytes:
+        with self.lock:
+            sessions = [self._session(row) for row in self.store.sessions()]
+        if not any(
+            session["project_name"] == request.project_name for session in sessions
+        ):
+            raise HTTPException(
+                status_code=404, detail=f"Project {request.project_name} not found"
+            )
+        return build_project_pdf(
+            project_name=request.project_name,
+            sessions=sessions,
+            options=PdfExportOptions(
+                show_totals=request.show_totals,
+                show_page_chart=request.show_page_chart,
+                show_activity_chart=request.show_activity_chart,
+                show_recent_activity=request.show_recent_activity,
+            ),
+            generated_at=self.now(),
+        )
 
     def events(self, *, once: bool, poll_interval_seconds: float) -> Iterator[str]:
         while True:
@@ -266,6 +296,15 @@ def create_app(
     def export_csv() -> Response:
         return Response(api.csv(), media_type="text/csv")
 
+    @app.post("/export.pdf")
+    def export_pdf(request: PdfExportRequest) -> Response:
+        filename = f"{_safe_filename(request.project_name)}-time-report.pdf"
+        return Response(
+            api.pdf(request),
+            media_type="application/pdf",
+            headers={"content-disposition": f'attachment; filename="{filename}"'},
+        )
+
     @app.get("/events")
     def events(once: bool = False) -> StreamingResponse:
         return StreamingResponse(
@@ -321,3 +360,10 @@ def _duration(seconds: int) -> str:
     hours, remainder = divmod(int(seconds), 3600)
     minutes, seconds = divmod(remainder, 60)
     return f"{hours}:{minutes:02d}:{seconds:02d}"
+
+
+def _safe_filename(value: str) -> str:
+    filename = "".join(
+        char if char.isalnum() or char in {"-", "_", "."} else "-" for char in value
+    ).strip("-")
+    return filename or "resolve-project"

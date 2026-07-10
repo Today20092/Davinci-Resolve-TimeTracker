@@ -41,6 +41,14 @@ export type SessionUpdate = {
   activity_category: string
 }
 
+export type PdfExportOptions = {
+  project_name: string
+  show_totals: boolean
+  show_page_chart: boolean
+  show_activity_chart: boolean
+  show_recent_activity: boolean
+}
+
 export function formatSidecarError(error: unknown) {
   return error instanceof Error ? error.message : String(error)
 }
@@ -101,10 +109,24 @@ export function createSidecarClient({
     return loadDashboard()
   }
 
+  async function exportPdf(options: PdfExportOptions) {
+    const response = await fetchRequest(`${baseUrl}/export.pdf`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(options),
+    })
+    if (!response.ok) {
+      const body = await response.text()
+      throw new Error(body || response.statusText)
+    }
+    return response.blob()
+  }
+
   return {
     loadDashboard,
     loadHistory,
     csvExportUrl: () => `${baseUrl}/export.csv`,
+    exportPdf,
     refresh: () =>
       runAndReload(() => request<Status>("/refresh", { method: "POST" })),
     setTracking: (enabled: boolean) =>

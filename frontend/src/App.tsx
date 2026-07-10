@@ -14,6 +14,7 @@ import {
 import {
   createSidecarClient,
   formatSidecarError,
+  type PdfExportOptions,
   type ProjectSummary,
   type Session,
   type SessionUpdate,
@@ -31,6 +32,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   type ChartConfig,
   ChartContainer,
@@ -96,6 +98,13 @@ const activityChartConfig = {
   rendering: { label: "Rendering", color: "var(--chart-4)" },
 } satisfies ChartConfig
 
+const defaultPdfOptions = {
+  show_totals: true,
+  show_page_chart: true,
+  show_activity_chart: true,
+  show_recent_activity: true,
+}
+
 function App() {
   const [status, setStatus] = useState<Status>(emptyStatus)
   const [projects, setProjects] = useState<ProjectSummary[]>([])
@@ -104,6 +113,7 @@ function App() {
   const [selectedSession, setSelectedSession] = useState<Session | null>(null)
   const [editForm, setEditForm] = useState<SessionUpdate | null>(null)
   const [idleMinutes, setIdleMinutes] = useState("5")
+  const [pdfOptions, setPdfOptions] = useState(defaultPdfOptions)
   const [theme, setTheme] = useState(() => localStorage.theme || "light")
   const [error, setError] = useState<string | null>(null)
 
@@ -210,6 +220,30 @@ function App() {
 
   function exportCsv() {
     window.location.href = sidecar.csvExportUrl()
+  }
+
+  async function exportPdf() {
+    if (!projectDashboard.project) return
+    try {
+      const options: PdfExportOptions = {
+        project_name: projectDashboard.project,
+        ...pdfOptions,
+      }
+      const blob = await sidecar.exportPdf(options)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `${projectDashboard.project.replaceAll(" ", "-")}-time-report.pdf`
+      link.click()
+      URL.revokeObjectURL(url)
+      setError(null)
+    } catch (caught) {
+      setError(formatSidecarError(caught))
+    }
+  }
+
+  function setPdfSection(section: keyof typeof pdfOptions, checked: boolean) {
+    setPdfOptions((options) => ({ ...options, [section]: checked }))
   }
 
   return (
@@ -486,10 +520,61 @@ function App() {
               </Empty>
             ) : (
               <section className="export-report flex flex-col gap-4">
+                <Card className="no-print">
+                  <CardHeader>
+                    <CardTitle>PDF export options</CardTitle>
+                    <CardDescription>
+                      Choose what appears in the client report.
+                    </CardDescription>
+                    <CardAction>
+                      <Button onClick={exportPdf}>
+                        <IconDownload data-icon="inline-start" />
+                        Export PDF
+                      </Button>
+                    </CardAction>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <PdfOption
+                        checked={pdfOptions.show_totals}
+                        id="pdf-show-totals"
+                        label="Summary totals"
+                        onCheckedChange={(checked) =>
+                          setPdfSection("show_totals", checked)
+                        }
+                      />
+                      <PdfOption
+                        checked={pdfOptions.show_page_chart}
+                        id="pdf-show-page-chart"
+                        label="Time by page"
+                        onCheckedChange={(checked) =>
+                          setPdfSection("show_page_chart", checked)
+                        }
+                      />
+                      <PdfOption
+                        checked={pdfOptions.show_activity_chart}
+                        id="pdf-show-activity-chart"
+                        label="Activity mix"
+                        onCheckedChange={(checked) =>
+                          setPdfSection("show_activity_chart", checked)
+                        }
+                      />
+                      <PdfOption
+                        checked={pdfOptions.show_recent_activity}
+                        id="pdf-show-recent-activity"
+                        label="Recent activity"
+                        onCheckedChange={(checked) =>
+                          setPdfSection("show_recent_activity", checked)
+                        }
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+
                 <div className="no-print flex justify-end">
-                  <Button onClick={() => window.print()}>
+                  <Button variant="outline" onClick={() => window.print()}>
                     <IconPrinter data-icon="inline-start" />
-                    Save PDF
+                    Print Preview
                   </Button>
                 </div>
 
@@ -509,126 +594,154 @@ function App() {
                     </div>
                   </div>
 
-                  <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <Metric
-                      title="Total tracked"
-                      value={duration(projectDashboard.trackedSeconds)}
-                    />
-                    <Metric
-                      title="Editing"
-                      value={duration(projectDashboard.editingSeconds)}
-                    />
-                    <Metric
-                      title="Rendering"
-                      value={duration(projectDashboard.renderingSeconds)}
-                    />
-                    <Metric
-                      title="Page rows"
-                      value={String(projectDashboard.sessionCount)}
-                    />
-                  </div>
+                  {pdfOptions.show_totals && (
+                    <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <Metric
+                        title="Total tracked"
+                        value={duration(projectDashboard.trackedSeconds)}
+                      />
+                      <Metric
+                        title="Editing"
+                        value={duration(projectDashboard.editingSeconds)}
+                      />
+                      <Metric
+                        title="Rendering"
+                        value={duration(projectDashboard.renderingSeconds)}
+                      />
+                      <Metric
+                        title="Page rows"
+                        value={String(projectDashboard.sessionCount)}
+                      />
+                    </div>
+                  )}
 
-                  <div className="mt-5 grid gap-4 lg:grid-cols-[1.5fr_1fr]">
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>Time by page</CardTitle>
-                        <CardDescription>
-                          DaVinci Resolve page activity
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        {pageChartData.length === 0 ? (
-                          <ChartEmpty />
-                        ) : (
-                          <ChartContainer
-                            config={pageChartConfig}
-                            className="h-72 w-full"
-                            initialDimension={{ width: 800, height: 288 }}
-                          >
-                            <BarChart
-                              accessibilityLayer
-                              data={pageChartData}
-                              layout="vertical"
-                              barCategoryGap={12}
-                              margin={{ left: 0, right: 56 }}
-                            >
-                              <XAxis dataKey="seconds" hide type="number" />
-                              <YAxis
-                                dataKey="page"
-                                axisLine={false}
-                                tickLine={false}
-                                type="category"
-                                width={72}
-                              />
-                              <Bar
-                                dataKey="seconds"
-                                fill="var(--color-seconds)"
-                                radius={4}
+                  {(pdfOptions.show_page_chart ||
+                    pdfOptions.show_activity_chart) && (
+                    <div className="mt-5 grid gap-4 lg:grid-cols-[1.5fr_1fr]">
+                      {pdfOptions.show_page_chart && (
+                        <Card>
+                          <CardHeader>
+                            <CardTitle>Time by page</CardTitle>
+                            <CardDescription>
+                              DaVinci Resolve page activity
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            {pageChartData.length === 0 ? (
+                              <ChartEmpty />
+                            ) : (
+                              <ChartContainer
+                                config={pageChartConfig}
+                                className="h-72 w-full"
+                                initialDimension={{ width: 800, height: 288 }}
                               >
-                                <LabelList
-                                  dataKey="seconds"
-                                  formatter={(value) => duration(Number(value))}
-                                  position="right"
-                                />
-                              </Bar>
-                            </BarChart>
-                          </ChartContainer>
-                        )}
-                      </CardContent>
-                    </Card>
+                                <BarChart
+                                  accessibilityLayer
+                                  data={pageChartData}
+                                  layout="vertical"
+                                  barCategoryGap={12}
+                                  margin={{ left: 0, right: 56 }}
+                                >
+                                  <XAxis dataKey="seconds" hide type="number" />
+                                  <YAxis
+                                    dataKey="page"
+                                    axisLine={false}
+                                    tickLine={false}
+                                    type="category"
+                                    width={72}
+                                  />
+                                  <Bar
+                                    dataKey="seconds"
+                                    fill="var(--color-seconds)"
+                                    radius={4}
+                                  >
+                                    <LabelList
+                                      dataKey="seconds"
+                                      formatter={(value) =>
+                                        duration(Number(value))
+                                      }
+                                      position="right"
+                                    />
+                                  </Bar>
+                                </BarChart>
+                              </ChartContainer>
+                            )}
+                          </CardContent>
+                        </Card>
+                      )}
 
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>Activity mix</CardTitle>
-                        <CardDescription>
-                          Editing and rendering time
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        {activityChartData.length === 0 ? (
-                          <ChartEmpty />
-                        ) : (
-                          <ChartContainer
-                            config={activityChartConfig}
-                            className="h-72 w-full"
-                            initialDimension={{ width: 360, height: 288 }}
-                          >
-                            <PieChart accessibilityLayer>
-                              <Pie
-                                data={activityChartData}
-                                dataKey="seconds"
-                                nameKey="label"
-                                innerRadius={58}
-                                outerRadius={92}
-                                paddingAngle={2}
+                      {pdfOptions.show_activity_chart && (
+                        <Card>
+                          <CardHeader>
+                            <CardTitle>Activity mix</CardTitle>
+                            <CardDescription>
+                              Editing and rendering time
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            {activityChartData.length === 0 ? (
+                              <ChartEmpty />
+                            ) : (
+                              <ChartContainer
+                                config={activityChartConfig}
+                                className="h-72 w-full"
+                                initialDimension={{ width: 360, height: 288 }}
                               >
-                                <LabelList
-                                  dataKey="seconds"
-                                  formatter={(value) => duration(Number(value))}
-                                />
-                              </Pie>
-                            </PieChart>
-                          </ChartContainer>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </div>
+                                <PieChart accessibilityLayer>
+                                  <Pie
+                                    data={activityChartData}
+                                    dataKey="seconds"
+                                    nameKey="label"
+                                    innerRadius={58}
+                                    outerRadius={92}
+                                    paddingAngle={2}
+                                  >
+                                    <LabelList
+                                      dataKey="seconds"
+                                      formatter={(value) =>
+                                        duration(Number(value))
+                                      }
+                                    />
+                                  </Pie>
+                                </PieChart>
+                              </ChartContainer>
+                            )}
+                          </CardContent>
+                        </Card>
+                      )}
+                    </div>
+                  )}
 
-                  <div className="mt-5">
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>Recent page activity</CardTitle>
-                        <CardDescription>
-                          Latest tracked rows for this project.
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <ActivityTable
-                          sessions={projectDashboard.recentSessions}
-                        />
-                      </CardContent>
-                    </Card>
-                  </div>
+                  {pdfOptions.show_recent_activity && (
+                    <div className="mt-5">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Recent page activity</CardTitle>
+                          <CardDescription>
+                            Latest tracked rows for this project.
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <ActivityTable
+                            sessions={projectDashboard.recentSessions}
+                          />
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )}
+
+                  {!Object.values(pdfOptions).some(Boolean) && (
+                    <div className="mt-5">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>No sections selected</CardTitle>
+                          <CardDescription>
+                            Select at least one option for a useful report.
+                          </CardDescription>
+                        </CardHeader>
+                      </Card>
+                    </div>
+                  )}
                 </div>
               </section>
             )}
@@ -784,6 +897,32 @@ function TrackingBadge({ live, enabled }: { live: boolean; enabled: boolean }) {
     >
       {live ? "Tracking now" : "Waiting for activity"}
     </Badge>
+  )
+}
+
+function PdfOption({
+  checked,
+  id,
+  label,
+  onCheckedChange,
+}: {
+  checked: boolean
+  id: string
+  label: string
+  onCheckedChange: (checked: boolean) => void
+}) {
+  return (
+    <label
+      className="flex items-center gap-2 rounded-lg border p-3 text-sm font-medium"
+      htmlFor={id}
+    >
+      <Checkbox
+        checked={checked}
+        id={id}
+        onCheckedChange={(value) => onCheckedChange(value === true)}
+      />
+      {label}
+    </label>
   )
 }
 
