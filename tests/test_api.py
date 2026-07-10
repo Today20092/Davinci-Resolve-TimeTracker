@@ -5,10 +5,9 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from resolve_time_tracker.activity_tracker import RuntimeSnapshot, RuntimeTracker
 from resolve_time_tracker.api import create_app
 from resolve_time_tracker.database import SQLiteStore
-from resolve_time_tracker.session_engine import SessionEngine
+from resolve_time_tracker.tracking_engine import RuntimeSnapshot, TrackingEngine
 
 
 def utc(hour: int, minute: int = 0) -> datetime:
@@ -31,9 +30,14 @@ class ApiTest(unittest.TestCase):
             with SQLiteStore(
                 Path(tmp) / "tracker.sqlite3", check_same_thread=False
             ) as store:
-                engine = SessionEngine(store)
-                engine.project_changed(utc(9), "Project A")
-                engine.resolve_closed(utc(10))
+                engine = TrackingEngine(
+                    store,
+                    snapshot_provider=SequenceSnapshotProvider(
+                        [RuntimeSnapshot("Project A", "edit", False, 0, True)]
+                    ),
+                )
+                engine.poll(utc(9))
+                engine.close(utc(10))
                 store.set_idle_timeout_seconds(600)
                 app = create_app(store, now=lambda: utc(11))
                 client = TestClient(app)
@@ -59,9 +63,8 @@ class ApiTest(unittest.TestCase):
             with SQLiteStore(
                 Path(tmp) / "tracker.sqlite3", check_same_thread=False
             ) as store:
-                tracker = RuntimeTracker(
-                    SessionEngine(store),
-                    idle_timeout_seconds=300,
+                tracker = TrackingEngine(
+                    store,
                     snapshot_provider=SequenceSnapshotProvider(
                         [
                             RuntimeSnapshot("Project A", "edit", False, 0, True),
@@ -69,7 +72,7 @@ class ApiTest(unittest.TestCase):
                         ]
                     ),
                 )
-                app = create_app(store, runtime_tracker=tracker, now=lambda: utc(9))
+                app = create_app(store, tracking_engine=tracker, now=lambda: utc(9))
                 client = TestClient(app)
 
                 refreshed = client.post("/refresh").json()

@@ -7,10 +7,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from resolve_time_tracker.activity_tracker import RuntimeTracker
 from resolve_time_tracker.database import SQLiteStore
 from resolve_time_tracker.resolve_bridge import ResolveBridge
-from resolve_time_tracker.session_engine import SessionEngine
+from resolve_time_tracker.tracking_engine import TrackingEngine
 
 
 POLL_SECONDS = 2
@@ -35,10 +34,8 @@ def run_resolve_ui(
     dispatcher = bmd.UIDispatcher(ui)
     db_path = Path(db_path)
     store = SQLiteStore(db_path, check_same_thread=False)
-    store.recover_active_session()
-    tracker = RuntimeTracker(
-        SessionEngine(store),
-        idle_timeout_seconds=store.idle_timeout_seconds(),
+    tracker = TrackingEngine(
+        store,
         snapshot_provider=ResolveBridge(resolve_object=resolve),
     )
 
@@ -99,7 +96,7 @@ def run_resolve_ui(
     def close() -> None:
         stopped.set()
         with lock:
-            tracker.engine.resolve_closed(datetime.now(timezone.utc))
+            tracker.close(datetime.now(timezone.utc))
             store.close()
         dispatcher.ExitLoop(0)
 

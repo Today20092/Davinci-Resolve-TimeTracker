@@ -6,39 +6,80 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from resolve_time_tracker.database import SQLiteStore
-from resolve_time_tracker.session_engine import SessionEngine
+from resolve_time_tracker.tracking_engine import RuntimeSnapshot, TrackingEngine
 
 
 def utc(hour: int, minute: int = 0) -> datetime:
     return datetime(2026, 1, 2, hour, minute, tzinfo=timezone.utc)
 
 
+class SequenceSnapshotProvider:
+    def __init__(self, snapshots: list[RuntimeSnapshot]):
+        self.snapshots = list(snapshots)
+
+    def snapshot(self) -> RuntimeSnapshot:
+        if not self.snapshots:
+            raise RuntimeError("No dry-run snapshots remain")
+        return self.snapshots.pop(0)
+
+
 class CoreTrackingTest(unittest.TestCase):
-    def test_events_create_only_billable_sessions(self):
+    def test_snapshots_create_only_billable_sessions(self):
+        snapshots = [
+            RuntimeSnapshot("Project A", None, False, 0, True),
+            RuntimeSnapshot("Project A", "edit", False, 0, True),
+            RuntimeSnapshot("Project A", "edit", False, 301, True),
+            RuntimeSnapshot("Project A", "edit", False, 0, True),
+            RuntimeSnapshot("Project A", "edit", False, 0, False),
+            RuntimeSnapshot("Project A", "edit", False, 0, True),
+            RuntimeSnapshot("Project A", "edit", True, 0, True),
+            RuntimeSnapshot("Project A", "edit", True, 0, False),
+            RuntimeSnapshot("Project A", "edit", False, 0, False),
+            RuntimeSnapshot("Project A", "edit", False, 0, True),
+            RuntimeSnapshot("Project B", "edit", False, 0, True),
+            RuntimeSnapshot(None, "edit", False, 0, True),
+        ]
+        observed_at = [
+            utc(9),
+            utc(9, 5),
+            utc(9, 30),
+            utc(9, 45),
+            utc(10),
+            utc(10, 15),
+            utc(10, 30),
+            utc(10, 40),
+            utc(11),
+            utc(11, 15),
+            utc(11, 30),
+            utc(12),
+        ]
+
         with tempfile.TemporaryDirectory() as tmp:
             with SQLiteStore(Path(tmp) / "tracker.sqlite3") as store:
-                engine = SessionEngine(store)
-
-                engine.project_changed(utc(9), "Project A")
-                engine.page_changed(utc(9, 5), "edit")
-                engine.idle_started(utc(9, 30))
-                engine.idle_ended(utc(9, 45))
-                engine.resolve_focus_lost(utc(10))
-                engine.resolve_focus_gained(utc(10, 15))
-                engine.rendering_started(utc(10, 30))
-                engine.resolve_focus_lost(utc(10, 40))
-                engine.rendering_finished(utc(11))
-                engine.resolve_focus_gained(utc(11, 15))
-                engine.project_changed(utc(11, 30), "Project B")
-                engine.resolve_closed(utc(12))
-
+                engine = TrackingEngine(
+                    store, snapshot_provider=SequenceSnapshotProvider(snapshots)
+                )
+                for timestamp in observed_at:
+                    engine.poll(timestamp)
                 rows = store.sessions()
 
         self.assertEqual(
             [
                 ("Project A", "Unknown", "editing", 9 * 3600, 9 * 3600 + 5 * 60),
-                ("Project A", "edit", "editing", 9 * 3600 + 5 * 60, 9 * 3600 + 30 * 60),
-                ("Project A", "edit", "editing", 9 * 3600 + 45 * 60, 10 * 3600),
+                (
+                    "Project A",
+                    "edit",
+                    "editing",
+                    9 * 3600 + 5 * 60,
+                    9 * 3600 + 30 * 60,
+                ),
+                (
+                    "Project A",
+                    "edit",
+                    "editing",
+                    9 * 3600 + 45 * 60,
+                    10 * 3600,
+                ),
                 (
                     "Project A",
                     "edit",
@@ -46,7 +87,13 @@ class CoreTrackingTest(unittest.TestCase):
                     10 * 3600 + 15 * 60,
                     10 * 3600 + 30 * 60,
                 ),
-                ("Project A", "edit", "rendering", 10 * 3600 + 30 * 60, 11 * 3600),
+                (
+                    "Project A",
+                    "edit",
+                    "rendering",
+                    10 * 3600 + 30 * 60,
+                    11 * 3600,
+                ),
                 (
                     "Project A",
                     "edit",
@@ -54,7 +101,13 @@ class CoreTrackingTest(unittest.TestCase):
                     11 * 3600 + 15 * 60,
                     11 * 3600 + 30 * 60,
                 ),
-                ("Project B", "edit", "editing", 11 * 3600 + 30 * 60, 12 * 3600),
+                (
+                    "Project B",
+                    "edit",
+                    "editing",
+                    11 * 3600 + 30 * 60,
+                    12 * 3600,
+                ),
             ],
             [
                 (
@@ -68,18 +121,26 @@ class CoreTrackingTest(unittest.TestCase):
             ],
         )
 
-    def test_recovery_closes_active_session_at_last_heartbeat(self):
+    def test_engine_startup_recovers_at_the_last_heartbeat(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "tracker.sqlite3"
             with SQLiteStore(path) as store:
-                engine = SessionEngine(store)
-
-                engine.project_changed(utc(13), "Project A")
-                engine.heartbeat_tick(utc(13, 10))
+                engine = TrackingEngine(
+                    store,
+                    snapshot_provider=SequenceSnapshotProvider(
+                        [
+                            RuntimeSnapshot("Project A", "edit", False, 0, True),
+                            RuntimeSnapshot("Project A", "edit", False, 0, True),
+                        ]
+                    ),
+                )
+                engine.poll(utc(13))
+                engine.poll(utc(13, 10))
 
             with SQLiteStore(path) as recovered:
-                recovered.recover_active_session()
-
+                TrackingEngine(
+                    recovered, snapshot_provider=SequenceSnapshotProvider([])
+                )
                 rows = recovered.sessions()
 
         self.assertEqual(1, len(rows))
@@ -89,9 +150,14 @@ class CoreTrackingTest(unittest.TestCase):
     def test_csv_export_contains_closed_sessions_with_durations(self):
         with tempfile.TemporaryDirectory() as tmp:
             with SQLiteStore(Path(tmp) / "tracker.sqlite3") as store:
-                engine = SessionEngine(store)
-                engine.project_changed(utc(14), "Project A")
-                engine.resolve_closed(utc(15, 30))
+                engine = TrackingEngine(
+                    store,
+                    snapshot_provider=SequenceSnapshotProvider(
+                        [RuntimeSnapshot("Project A", "edit", False, 0, True)]
+                    ),
+                )
+                engine.poll(utc(14))
+                engine.close(utc(15, 30))
 
                 output = io.StringIO()
                 store.write_csv(output)
@@ -99,9 +165,9 @@ class CoreTrackingTest(unittest.TestCase):
         rows = list(csv.DictReader(io.StringIO(output.getvalue())))
         self.assertEqual(1, len(rows))
         self.assertEqual("Project A", rows[0]["project_name"])
+        self.assertEqual("editing", rows[0]["activity_category"])
         self.assertEqual("5400", rows[0]["duration_seconds"])
         self.assertEqual("1.5000", rows[0]["duration_hours"])
-        self.assertEqual("editing", rows[0]["activity_category"])
 
 
 def _seconds(value: str) -> int:

@@ -7,12 +7,10 @@ from unittest.mock import patch
 from resolve_time_tracker.activity_tracker import (
     LinuxActivityProbe,
     MacActivityProbe,
-    RuntimeSnapshot,
-    RuntimeTracker,
 )
 from resolve_time_tracker.database import SQLiteStore
 from resolve_time_tracker.resolve_bridge import ResolveBridge, default_scripting_root
-from resolve_time_tracker.session_engine import SessionEngine
+from resolve_time_tracker.tracking_engine import RuntimeSnapshot, TrackingEngine
 
 
 def utc(hour: int, minute: int = 0) -> datetime:
@@ -33,10 +31,8 @@ class RuntimeTrackingTest(unittest.TestCase):
     def test_fake_snapshots_drive_engine_events_and_heartbeats(self):
         with tempfile.TemporaryDirectory() as tmp:
             with SQLiteStore(Path(tmp) / "tracker.sqlite3") as store:
-                engine = SessionEngine(store)
-                tracker = RuntimeTracker(
-                    engine,
-                    idle_timeout_seconds=300,
+                tracker = TrackingEngine(
+                    store,
                     snapshot_provider=SequenceSnapshotProvider(
                         [
                             RuntimeSnapshot("Project A", "edit", False, 0, True),
@@ -76,9 +72,8 @@ class RuntimeTrackingTest(unittest.TestCase):
     def test_active_poll_updates_heartbeat(self):
         with tempfile.TemporaryDirectory() as tmp:
             with SQLiteStore(Path(tmp) / "tracker.sqlite3") as store:
-                tracker = RuntimeTracker(
-                    SessionEngine(store),
-                    idle_timeout_seconds=300,
+                tracker = TrackingEngine(
+                    store,
                     snapshot_provider=SequenceSnapshotProvider(
                         [
                             RuntimeSnapshot("Project A", "cut", False, 0, True),
@@ -97,9 +92,8 @@ class RuntimeTrackingTest(unittest.TestCase):
     def test_lowered_idle_timeout_closes_active_session_on_next_poll(self):
         with tempfile.TemporaryDirectory() as tmp:
             with SQLiteStore(Path(tmp) / "tracker.sqlite3") as store:
-                tracker = RuntimeTracker(
-                    SessionEngine(store),
-                    idle_timeout_seconds=300,
+                tracker = TrackingEngine(
+                    store,
                     snapshot_provider=SequenceSnapshotProvider(
                         [
                             RuntimeSnapshot("Project A", "edit", False, 100, True),
@@ -109,7 +103,7 @@ class RuntimeTrackingTest(unittest.TestCase):
                 )
 
                 tracker.poll(utc(11))
-                tracker.idle_timeout_seconds = 60
+                store.set_idle_timeout_seconds(60)
                 tracker.poll(utc(11, 1))
 
                 rows = store.sessions()
@@ -121,9 +115,9 @@ class RuntimeTrackingTest(unittest.TestCase):
     def test_raised_idle_timeout_resumes_tracking_on_next_poll(self):
         with tempfile.TemporaryDirectory() as tmp:
             with SQLiteStore(Path(tmp) / "tracker.sqlite3") as store:
-                tracker = RuntimeTracker(
-                    SessionEngine(store),
-                    idle_timeout_seconds=60,
+                store.set_idle_timeout_seconds(60)
+                tracker = TrackingEngine(
+                    store,
                     snapshot_provider=SequenceSnapshotProvider(
                         [
                             RuntimeSnapshot("Project A", "edit", False, 100, True),
@@ -133,7 +127,7 @@ class RuntimeTrackingTest(unittest.TestCase):
                 )
 
                 tracker.poll(utc(12))
-                tracker.idle_timeout_seconds = 300
+                store.set_idle_timeout_seconds(300)
                 tracker.poll(utc(12, 1))
 
                 active = store.active_session()
@@ -143,9 +137,8 @@ class RuntimeTrackingTest(unittest.TestCase):
     def test_manual_pause_closes_and_resume_reopens_on_next_poll(self):
         with tempfile.TemporaryDirectory() as tmp:
             with SQLiteStore(Path(tmp) / "tracker.sqlite3") as store:
-                tracker = RuntimeTracker(
-                    SessionEngine(store),
-                    idle_timeout_seconds=300,
+                tracker = TrackingEngine(
+                    store,
                     snapshot_provider=SequenceSnapshotProvider(
                         [
                             RuntimeSnapshot("Project A", "edit", False, 0, True),
@@ -167,6 +160,23 @@ class RuntimeTrackingTest(unittest.TestCase):
         self.assertEqual("Project A", paused_snapshot.project_name)
         self.assertEqual("2026-01-02T13:10:00Z", rows[0]["ended_at_utc"])
         self.assertEqual("2026-01-02T13:30:00Z", active["started_at_utc"])
+
+    def test_close_ends_the_active_session(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with SQLiteStore(Path(tmp) / "tracker.sqlite3") as store:
+                tracker = TrackingEngine(
+                    store,
+                    snapshot_provider=SequenceSnapshotProvider(
+                        [RuntimeSnapshot("Project A", "edit", False, 0, True)]
+                    ),
+                )
+
+                tracker.poll(utc(14))
+                tracker.close(utc(14, 30))
+
+                rows = store.sessions()
+
+        self.assertEqual("2026-01-02T14:30:00Z", rows[0]["ended_at_utc"])
 
     def test_mac_activity_probe_parses_idle_and_foreground(self):
         def run_text(command: list[str]) -> str:

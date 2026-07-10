@@ -1,4 +1,4 @@
-"""Boundary for DaVinci Resolve scripting API access."""
+"""Adapter for DaVinci Resolve scripting access."""
 
 from __future__ import annotations
 
@@ -9,10 +9,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from resolve_time_tracker.activity_tracker import (
-    RuntimeSnapshot,
-    default_activity_probe,
-)
+from resolve_time_tracker.activity_tracker import default_activity_probe
+from resolve_time_tracker.tracking_engine import RuntimeSnapshot
 
 
 def default_scripting_root() -> Path:

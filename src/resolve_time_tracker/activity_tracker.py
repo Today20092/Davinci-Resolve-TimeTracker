@@ -1,4 +1,4 @@
-"""Activity, idle, focus, playback, and render signal tracking."""
+"""Operating-system activity and foreground probes."""
 
 from __future__ import annotations
 
@@ -8,103 +8,9 @@ import platform
 import re
 import shutil
 import subprocess
-from dataclasses import dataclass
 from ctypes import wintypes
 from pathlib import Path
-from typing import Any, Callable
-
-from resolve_time_tracker.session_engine import SessionEngine
-
-
-@dataclass(frozen=True)
-class RuntimeSnapshot:
-    project_name: str | None
-    page: str | None
-    is_rendering: bool
-    idle_seconds: float | None
-    resolve_is_foreground: bool
-    timeline_name: str | None = None
-    timeline_id: str | None = None
-    timecode: str | None = None
-
-
-class RuntimeTracker:
-    def __init__(
-        self,
-        engine: SessionEngine,
-        *,
-        idle_timeout_seconds: int,
-        snapshot_provider: Any,
-    ):
-        self.engine = engine
-        self.idle_timeout_seconds = idle_timeout_seconds
-        self.snapshot_provider = snapshot_provider
-        self._previous: RuntimeSnapshot | None = None
-        self._previous_idle: bool | None = None
-        self.tracking_enabled = True
-
-    @property
-    def previous_snapshot(self) -> RuntimeSnapshot | None:
-        return self._previous
-
-    def poll(self, observed_at) -> RuntimeSnapshot:
-        if not self.tracking_enabled:
-            self.engine.resolve_closed(observed_at)
-            self._previous_idle = None
-            return self._previous or RuntimeSnapshot(None, None, False, None, False)
-
-        snapshot = self.snapshot_provider.snapshot()
-        previous = self._previous
-
-        idle_now = (
-            snapshot.idle_seconds is not None
-            and snapshot.idle_seconds >= self.idle_timeout_seconds
-        )
-        idle_before = self._previous_idle
-
-        if previous is None or idle_now != idle_before:
-            if idle_now:
-                self.engine.idle_started(observed_at)
-            else:
-                self.engine.idle_ended(observed_at)
-
-        if (
-            previous is None
-            or snapshot.resolve_is_foreground != previous.resolve_is_foreground
-        ):
-            if snapshot.resolve_is_foreground:
-                self.engine.resolve_focus_gained(observed_at)
-            else:
-                self.engine.resolve_focus_lost(observed_at)
-
-        if previous is None or snapshot.page != previous.page:
-            self.engine.page_changed(observed_at, snapshot.page or "Unknown")
-
-        if previous is None or snapshot.project_name != previous.project_name:
-            if snapshot.project_name:
-                self.engine.project_changed(observed_at, snapshot.project_name)
-            else:
-                self.engine.project_closed(observed_at)
-
-        if previous is None or snapshot.is_rendering != previous.is_rendering:
-            if snapshot.is_rendering:
-                self.engine.rendering_started(observed_at)
-            else:
-                self.engine.rendering_finished(observed_at)
-
-        self.engine.heartbeat_tick(observed_at)
-        self._previous = snapshot
-        self._previous_idle = idle_now
-        return snapshot
-
-    def pause(self, observed_at) -> None:
-        self.tracking_enabled = False
-        self.engine.resolve_closed(observed_at)
-
-    def resume(self) -> None:
-        self.tracking_enabled = True
-        self._previous = None
-        self._previous_idle = None
+from typing import Callable
 
 
 class LASTINPUTINFO(ctypes.Structure):

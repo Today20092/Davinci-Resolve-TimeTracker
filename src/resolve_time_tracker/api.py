@@ -15,10 +15,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
-from resolve_time_tracker.activity_tracker import RuntimeTracker
 from resolve_time_tracker.database import SQLiteStore
 from resolve_time_tracker.resolve_bridge import ResolveBridge
-from resolve_time_tracker.session_engine import SessionEngine
+from resolve_time_tracker.tracking_engine import TrackingEngine
 
 
 Now = Callable[[], datetime]
@@ -40,11 +39,11 @@ class ApiState:
         self,
         store: SQLiteStore,
         *,
-        runtime_tracker: RuntimeTracker | None = None,
+        tracking_engine: TrackingEngine | None = None,
         now: Now | None = None,
     ):
         self.store = store
-        self.runtime_tracker = runtime_tracker
+        self.tracking_engine = tracking_engine
         self.now = now or (lambda: datetime.now(timezone.utc))
         self.last_runtime_error: str | None = None
         self.lock = threading.Lock()
@@ -55,7 +54,7 @@ class ApiState:
 
     def refresh(self) -> dict[str, Any]:
         with self.lock:
-            if self.runtime_tracker is not None:
+            if self.tracking_engine is not None:
                 try:
                     self._poll_unlocked()
                     self.last_runtime_error = None
@@ -65,14 +64,14 @@ class ApiState:
 
     def pause(self) -> dict[str, Any]:
         with self.lock:
-            if self.runtime_tracker is not None:
-                self.runtime_tracker.pause(self.now())
+            if self.tracking_engine is not None:
+                self.tracking_engine.pause(self.now())
             return self._status_unlocked()
 
     def resume(self) -> dict[str, Any]:
         with self.lock:
-            if self.runtime_tracker is not None:
-                self.runtime_tracker.resume()
+            if self.tracking_engine is not None:
+                self.tracking_engine.resume()
                 try:
                     self._poll_unlocked()
                     self.last_runtime_error = None
@@ -107,8 +106,6 @@ class ApiState:
                 self.store.set_idle_timeout_seconds(update.idle_timeout_seconds)
             except ValueError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
-            if self.runtime_tracker is not None:
-                self.runtime_tracker.idle_timeout_seconds = update.idle_timeout_seconds
             return self._settings_unlocked()
 
     def update_session(self, session_id: int, update: SessionUpdate) -> dict[str, Any]:
@@ -139,16 +136,15 @@ class ApiState:
             time.sleep(poll_interval_seconds)
 
     def _poll_unlocked(self) -> None:
-        if self.runtime_tracker is None:
+        if self.tracking_engine is None:
             return
-        self.runtime_tracker.idle_timeout_seconds = self.store.idle_timeout_seconds()
-        self.runtime_tracker.poll(self.now())
+        self.tracking_engine.poll(self.now())
 
     def _status_unlocked(self) -> dict[str, Any]:
         active = self.store.active_session_summary()
         snapshot = (
-            self.runtime_tracker.previous_snapshot
-            if self.runtime_tracker is not None
+            self.tracking_engine.previous_snapshot
+            if self.tracking_engine is not None
             else None
         )
         status = {
@@ -178,9 +174,9 @@ class ApiState:
         elif snapshot is not None:
             status["project"] = snapshot.project_name or "none"
             status["page"] = snapshot.page or "none"
-        if self.runtime_tracker is not None:
-            status["tracking_enabled"] = self.runtime_tracker.tracking_enabled
-            if not self.runtime_tracker.tracking_enabled:
+        if self.tracking_engine is not None:
+            status["tracking_enabled"] = self.tracking_engine.tracking_enabled
+            if not self.tracking_engine.tracking_enabled:
                 status["state"] = "manual pause"
         if self.last_runtime_error:
             status["connection"] = "error"
@@ -217,11 +213,11 @@ class ApiState:
 def create_app(
     store: SQLiteStore,
     *,
-    runtime_tracker: RuntimeTracker | None = None,
+    tracking_engine: TrackingEngine | None = None,
     now: Now | None = None,
     poll_interval_seconds: float = 5,
 ) -> FastAPI:
-    api = ApiState(store, runtime_tracker=runtime_tracker, now=now)
+    api = ApiState(store, tracking_engine=tracking_engine, now=now)
     app = FastAPI(title="Resolve Time Tracker")
     app.add_middleware(
         CORSMiddleware,
@@ -286,13 +282,8 @@ def run_api(db_path: str | Path, *, host: str = "127.0.0.1", port: int = 8765) -
 
     store = SQLiteStore(db_path, check_same_thread=False)
     try:
-        store.recover_active_session()
-        tracker = RuntimeTracker(
-            SessionEngine(store),
-            idle_timeout_seconds=store.idle_timeout_seconds(),
-            snapshot_provider=ResolveBridge(),
-        )
-        uvicorn.run(create_app(store, runtime_tracker=tracker), host=host, port=port)
+        engine = TrackingEngine(store, snapshot_provider=ResolveBridge())
+        uvicorn.run(create_app(store, tracking_engine=engine), host=host, port=port)
     finally:
         store.close()
 
