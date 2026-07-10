@@ -72,6 +72,24 @@ function stopSidecar() {
   }
 }
 
+async function apiIsRunning(timeoutMs = 250) {
+  try {
+    const status = await new Promise((resolve, reject) => {
+      const request = http.get(`${apiBase}/status`, (response) => {
+        response.resume()
+        resolve(response.statusCode)
+      })
+      request.on("error", reject)
+      request.setTimeout(timeoutMs, () => {
+        request.destroy(new Error("timeout"))
+      })
+    })
+    return status === 200
+  } catch {
+    return false
+  }
+}
+
 function finishSmoke(ok, message = null) {
   if (smokeFinished) {
     return
@@ -85,21 +103,9 @@ function finishSmoke(ok, message = null) {
 
 async function waitForApi() {
   for (let attempt = 0; attempt < 50; attempt += 1) {
-    try {
-      const status = await new Promise((resolve, reject) => {
-        const request = http.get(`${apiBase}/status`, (response) => {
-          response.resume()
-          resolve(response.statusCode)
-        })
-        request.on("error", reject)
-        request.setTimeout(1000, () => {
-          request.destroy(new Error("timeout"))
-        })
-      })
-      if (status === 200) {
-        return
-      }
-    } catch {}
+    if (await apiIsRunning(1000)) {
+      return
+    }
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
   throw new Error(`Sidecar did not respond at ${apiBase}`)
@@ -154,7 +160,9 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   try {
-    startSidecar()
+    if (!(await apiIsRunning())) {
+      startSidecar()
+    }
     await waitForApi()
     createWindow()
   } catch (error) {

@@ -35,6 +35,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--db", type=Path, default=default_db_path())
     parser.add_argument("--api", action="store_true")
+    parser.add_argument("--tracker", action="store_true")
     parser.add_argument("--companion", action="store_true")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
@@ -91,7 +92,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.version:
         print(f"Resolve Time Tracker {__version__}")
         return 0
-    if args.api:
+    if args.api or args.tracker:
         from resolve_time_tracker.api import run_api
 
         run_api(args.db, host=args.host, port=args.port)

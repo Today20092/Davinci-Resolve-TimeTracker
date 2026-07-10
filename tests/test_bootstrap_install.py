@@ -147,6 +147,38 @@ class BootstrapInstallTest(unittest.TestCase):
             run.mock_calls,
         )
 
+    def test_startup_choice_defaults_to_manual_without_tty(self):
+        with patch("sys.stdin.isatty", return_value=False):
+            self.assertEqual("manual", install.choose_startup_mode())
+
+    def test_installs_windows_startup_script(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            source.mkdir()
+            python = source / ".venv" / "Scripts" / "python.exe"
+            python.parent.mkdir(parents=True)
+            python.write_text("", encoding="utf-8")
+
+            with (
+                patch("platform.system", return_value="Windows"),
+                patch.dict(os.environ, {"APPDATA": str(root / "roaming")}),
+            ):
+                target = install.install_startup(source, python)
+
+            text = target.read_text(encoding="utf-8")
+            self.assertEqual(install.STARTUP_SCRIPT_NAME, target.name)
+            self.assertIn("ResolveTimeTracker.py", text)
+            self.assertIn("--tracker", text)
+
+    def test_electron_connects_to_existing_sidecar_before_spawning(self):
+        root = Path(__file__).resolve().parents[1]
+        text = (root / "frontend" / "electron" / "main.cjs").read_text()
+
+        self.assertIn("async function apiIsRunning", text)
+        self.assertIn("if (!(await apiIsRunning()))", text)
+        self.assertIn("startSidecar()", text)
+
     def test_uv_command_honors_bootstrap_env_path(self):
         with patch.dict(os.environ, {"RESOLVE_TIME_TRACKER_UV": "/tmp/uv"}):
             self.assertEqual(["/tmp/uv"], install.uv_command())

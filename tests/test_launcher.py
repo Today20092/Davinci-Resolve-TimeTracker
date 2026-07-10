@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from scripts.ResolveTimeTracker import (
     default_db_path,
+    main,
     parse_args,
     run_electron_companion,
 )
@@ -48,6 +49,24 @@ class LauncherTest(unittest.TestCase):
         self.assertTrue(args.api)
         self.assertEqual("127.0.0.1", args.host)
         self.assertEqual(9000, args.port)
+
+    def test_parses_headless_tracker_arguments(self):
+        args = parse_args(["--tracker", "--host", "127.0.0.1", "--port", "9000"])
+
+        self.assertTrue(args.tracker)
+        self.assertEqual("127.0.0.1", args.host)
+        self.assertEqual(9000, args.port)
+
+    def test_headless_tracker_runs_api_sidecar(self):
+        with patch("resolve_time_tracker.api.run_api") as run_api:
+            self.assertEqual(
+                0,
+                main(["--tracker", "--host", "127.0.0.1", "--port", "9000"]),
+            )
+
+        run_api.assert_called_once()
+        self.assertEqual("127.0.0.1", run_api.call_args.kwargs["host"])
+        self.assertEqual(9000, run_api.call_args.kwargs["port"])
 
     def test_companion_launches_electron_with_current_python(self):
         with (

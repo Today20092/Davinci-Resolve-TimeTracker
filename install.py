@@ -13,6 +13,7 @@ from pathlib import Path
 
 REPO_URL = "https://github.com/Today20092/Davinci-Resolve-TimeTracker.git"
 PYTHON_VERSION = "3.13"
+STARTUP_SCRIPT_NAME = "ResolveTimeTrackerBackground.cmd"
 
 
 def is_source_checkout(path: Path) -> bool:
@@ -125,6 +126,61 @@ def install_menu(source_dir: Path, uv: list[str], utility_dir: Path | None) -> P
     return target
 
 
+def windows_startup_dir() -> Path:
+    return (
+        Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+        / "Microsoft"
+        / "Windows"
+        / "Start Menu"
+        / "Programs"
+        / "Startup"
+    )
+
+
+def install_startup(source_dir: Path, python: Path | None = None) -> Path:
+    if platform.system() != "Windows":
+        raise RuntimeError(
+            "Background auto-start is currently only installed on Windows"
+        )
+    if python is None and os.name == "nt":
+        pythonw = source_dir / ".venv" / "Scripts" / "pythonw.exe"
+        python = pythonw if pythonw.exists() else None
+    python = python or venv_python(source_dir)
+    if python is None:
+        raise RuntimeError(
+            f"uv sync did not create a virtualenv Python under {source_dir / '.venv'}"
+        )
+    startup_dir = windows_startup_dir()
+    startup_dir.mkdir(parents=True, exist_ok=True)
+    target = startup_dir / STARTUP_SCRIPT_NAME
+    target.write_text(
+        "\n".join(
+            [
+                "@echo off",
+                f'cd /d "{source_dir.resolve()}"',
+                (
+                    f'start "" /min "{python}" '
+                    f'"{source_dir.resolve() / "scripts" / "ResolveTimeTracker.py"}" '
+                    "--tracker"
+                ),
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return target
+
+
+def choose_startup_mode(*, default: str = "manual") -> str:
+    if not sys.stdin.isatty():
+        return default
+    print("How should Resolve Time Tracker start?", flush=True)
+    print("  [1] Manual only (default)", flush=True)
+    print("  [2] Start with my computer", flush=True)
+    answer = input("Choose 1 or 2: ").strip()
+    return "auto" if answer == "2" else "manual"
+
+
 def install_frontend(source_dir: Path) -> None:
     frontend_dir = source_dir / "frontend"
     if not (frontend_dir / "package.json").is_file():
@@ -171,6 +227,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--utility-dir", type=Path, help="Override Resolve Scripts/Utility folder"
     )
+    parser.add_argument(
+        "--startup",
+        choices=["ask", "manual", "auto"],
+        default="ask",
+        help="Startup behavior; ask defaults to manual in non-interactive installs",
+    )
     return parser.parse_args()
 
 
@@ -185,14 +247,24 @@ def main() -> int:
     print(f"  - Source checkout: {source_dir}", flush=True)
     print("  - Install/update frontend dependencies if the companion app is present.", flush=True)
     print("  - Install the DaVinci Resolve Scripts menu entry.", flush=True)
+    print("  - Ask before enabling background auto-start.", flush=True)
     print("", flush=True)
     ensure_source(source_dir, args.repo_url, update_source)
     uv = ensure_uv()
     install_frontend(source_dir)
     target = install_menu(source_dir, uv, args.utility_dir)
+    startup_mode = choose_startup_mode() if args.startup == "ask" else args.startup
+    startup_target = None
+    if startup_mode == "auto":
+        startup_target = install_startup(source_dir)
     print(f"Source: {source_dir}")
     print(f"Resolve menu script: {target}")
-    print("Open Resolve, then run Workspace > Scripts > ResolveTimeTrackerMenu")
+    if startup_target is None:
+        print("Startup: manual only")
+        print("Open Resolve, then run Workspace > Scripts > ResolveTimeTrackerMenu")
+    else:
+        print(f"Startup: {startup_target}")
+        print("Resolve Time Tracker will start with your computer.")
     return 0
 
 

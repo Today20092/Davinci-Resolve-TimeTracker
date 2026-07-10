@@ -30,6 +30,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
 The installer downloads the project source, installs Python dependencies, builds the companion app, and adds the DaVinci Resolve menu script.
+It asks whether tracking should stay manual or start automatically with your computer. Manual start is the default.
 
 ### macOS
 
@@ -72,6 +73,8 @@ Workspace > Scripts > ResolveTimeTrackerMenu
 ```
 
 The companion window shows tracking status, current project, current page, activity category, heartbeat, sessions, settings, and CSV export. Use **Pause Tracking** when you want to stop tracking manually, and **Resume Tracking** when you want it to start again.
+
+If you opted into background startup during install, the tracker starts with your computer and records Resolve activity even when the companion window is closed.
 
 CSV export writes closed sessions only. Open active sessions are exported after they close.
 
