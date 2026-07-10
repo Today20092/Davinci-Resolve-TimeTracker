@@ -9,9 +9,8 @@ import {
 } from "lucide-react"
 
 import {
-  api,
-  apiBase,
-  downloadUrl,
+  createSidecarClient,
+  formatSidecarError,
   type ProjectSummary,
   type Session,
   type SessionUpdate,
@@ -68,6 +67,9 @@ const emptyStatus: Status = {
   db_path: "",
 }
 
+const sidecar = createSidecarClient()
+type Dashboard = Awaited<ReturnType<typeof sidecar.loadDashboard>>
+
 function App() {
   const [status, setStatus] = useState<Status>(emptyStatus)
   const [projects, setProjects] = useState<ProjectSummary[]>([])
@@ -78,42 +80,28 @@ function App() {
   const [idleMinutes, setIdleMinutes] = useState("5")
   const [error, setError] = useState<string | null>(null)
 
-  async function loadTables() {
-    const [nextProjects, nextSessions] = await Promise.all([
-      api<ProjectSummary[]>("/projects"),
-      api<Session[]>("/sessions"),
-    ])
-    setProjects(nextProjects)
-    setSessions(nextSessions)
-  }
-
-  async function loadAll() {
-    try {
-      const [nextStatus, nextSettings] = await Promise.all([
-        api<Status>("/status"),
-        api<Settings>("/settings"),
-        loadTables(),
-      ])
-      setStatus(nextStatus)
-      setSettings(nextSettings)
-      setIdleMinutes(String(nextSettings.idle_timeout_minutes))
-      setError(null)
-    } catch (caught) {
-      setError(messageFrom(caught))
-    }
+  function applyDashboard(dashboard: Dashboard) {
+    setStatus(dashboard.status)
+    setSettings(dashboard.settings)
+    setProjects(dashboard.projects)
+    setSessions(dashboard.sessions)
+    setIdleMinutes(String(dashboard.settings.idle_timeout_minutes))
+    setError(null)
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadAll()
-    const events = new EventSource(`${apiBase}/events`)
-    events.addEventListener("status", (event) => {
-      setStatus(JSON.parse((event as MessageEvent).data) as Status)
-      void loadTables().catch((caught) => setError(messageFrom(caught)))
+    void sidecar.loadDashboard().then(applyDashboard, (error) => {
+      setError(formatSidecarError(error))
     })
-    events.onerror = () => setError("Waiting for the sidecar API")
-    return () => events.close()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return sidecar.watchDashboard({
+      onUpdate: (update) => {
+        setStatus(update.status)
+        setProjects(update.projects)
+        setSessions(update.sessions)
+        setError(null)
+      },
+      onError: (error) => setError(formatSidecarError(error)),
+    })
   }, [])
 
   const totals = useMemo(() => {
@@ -131,13 +119,11 @@ function App() {
     }
   }, [projects])
 
-  async function runAction(action: () => Promise<unknown>) {
+  async function runAction(action: () => Promise<Dashboard>) {
     try {
-      await action()
-      await loadAll()
-      setError(null)
+      applyDashboard(await action())
     } catch (caught) {
-      setError(messageFrom(caught))
+      setError(formatSidecarError(caught))
     }
   }
 
@@ -153,29 +139,19 @@ function App() {
 
   async function saveSession() {
     if (!selectedSession || !editForm) return
-    await runAction(() =>
-      api(`/sessions/${selectedSession.id}`, {
-        method: "POST",
-        body: JSON.stringify(editForm),
-      })
-    )
+    await runAction(() => sidecar.updateSession(selectedSession.id, editForm))
     setSelectedSession(null)
     setEditForm(null)
   }
 
   async function saveSettings() {
     await runAction(() =>
-      api("/settings", {
-        method: "POST",
-        body: JSON.stringify({
-          idle_timeout_seconds: Math.max(1, Number(idleMinutes) || 1) * 60,
-        }),
-      })
+      sidecar.updateSettings(Math.max(1, Number(idleMinutes) || 1) * 60)
     )
   }
 
   function exportCsv() {
-    window.location.href = downloadUrl("/export.csv")
+    window.location.href = sidecar.csvExportUrl()
   }
 
   return (
@@ -198,14 +174,7 @@ function App() {
             <Button
               variant="outline"
               onClick={() =>
-                runAction(() =>
-                  api(
-                    status.tracking_enabled
-                      ? "/tracking/pause"
-                      : "/tracking/resume",
-                    { method: "POST" }
-                  )
-                )
+                runAction(() => sidecar.setTracking(!status.tracking_enabled))
               }
             >
               {status.tracking_enabled ? (
@@ -219,9 +188,7 @@ function App() {
               variant="outline"
               size="icon"
               aria-label="Refresh"
-              onClick={() =>
-                runAction(() => api("/refresh", { method: "POST" }))
-              }
+              onClick={() => runAction(() => sidecar.refresh())}
             >
               <RefreshCwIcon />
             </Button>
@@ -541,10 +508,6 @@ function duration(seconds: number) {
   const minutes = Math.floor((seconds % 3600) / 60)
   const rest = seconds % 60
   return `${hours}:${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`
-}
-
-function messageFrom(error: unknown) {
-  return error instanceof Error ? error.message : String(error)
 }
 
 export default App
