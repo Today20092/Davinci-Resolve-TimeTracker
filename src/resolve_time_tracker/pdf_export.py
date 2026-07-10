@@ -73,7 +73,7 @@ def build_project_pdf(
                         ["Total tracked", _duration(totals["tracked"])],
                         ["Editing", _duration(totals["editing"])],
                         ["Rendering", _duration(totals["rendering"])],
-                        ["Page rows", str(len(project_sessions))],
+                        ["Tracked sessions", str(len(project_sessions))],
                     ],
                     widths=[2.2 * inch, 4.1 * inch],
                 ),
