@@ -24,11 +24,21 @@ function hasArg(name) {
 
 function startSidecar() {
   const db = readArg("--db")
-  const python = process.env.RESOLVE_TIME_TRACKER_PYTHON
+  const python = readArg("--python") || process.env.RESOLVE_TIME_TRACKER_PYTHON
   const command = python || "uv"
   const args = python
     ? [path.join(repoRoot, "scripts", "ResolveTimeTracker.py")]
-    : ["run", "scripts/ResolveTimeTracker.py"]
+    : [
+        "run",
+        "--isolated",
+        "--python",
+        "3.13",
+        "--with",
+        "fastapi",
+        "--with",
+        "uvicorn",
+        "scripts/ResolveTimeTracker.py",
+      ]
 
   args.push("--api", "--host", "127.0.0.1", "--port", String(apiPort))
   if (db) {
@@ -40,6 +50,12 @@ function startSidecar() {
     env: process.env,
     stdio: "pipe",
     windowsHide: true,
+  })
+
+  sidecar.stdout.on("data", (data) => process.stdout.write(data))
+  sidecar.stderr.on("data", (data) => process.stderr.write(data))
+  sidecar.on("exit", (code, signal) => {
+    console.error(`Python sidecar exited: code=${code} signal=${signal}`)
   })
 
   sidecar.on("error", (error) => {

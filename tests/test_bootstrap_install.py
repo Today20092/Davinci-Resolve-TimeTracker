@@ -110,6 +110,47 @@ class BootstrapInstallTest(unittest.TestCase):
             run.mock_calls,
         )
 
+    def test_install_menu_forces_python_313_uv_environment(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp)
+            target = source / "ResolveTimeTrackerMenu.py"
+            if os.name == "nt":
+                python = source / ".venv" / "Scripts" / "python.exe"
+            else:
+                python = source / ".venv" / "bin" / "python"
+            python.parent.mkdir(parents=True)
+            python.write_text("", encoding="utf-8")
+
+            with (
+                patch(
+                    "install.run",
+                    side_effect=["", str(target)],
+                ) as run,
+                patch("install.verify_menu_script"),
+            ):
+                self.assertEqual(target, install.install_menu(source, ["uv"], None))
+
+        self.assertEqual(
+            [
+                call(["uv", "sync", "--python", "3.13"], cwd=source),
+                call(
+                    [
+                        "uv",
+                        "run",
+                        "--python",
+                        "3.13",
+                        "scripts/install_resolve_menu.py",
+                    ],
+                    cwd=source,
+                ),
+            ],
+            run.mock_calls,
+        )
+
+    def test_uv_command_honors_bootstrap_env_path(self):
+        with patch.dict(os.environ, {"RESOLVE_TIME_TRACKER_UV": "/tmp/uv"}):
+            self.assertEqual(["/tmp/uv"], install.uv_command())
+
     def test_native_installers_use_uv_standalone_installers(self):
         root = Path(__file__).resolve().parents[1]
 
@@ -119,8 +160,10 @@ class BootstrapInstallTest(unittest.TestCase):
         self.assertIn(
             "https://astral.sh/uv/install.sh", (root / "install.sh").read_text()
         )
-        self.assertIn("--no-sync", (root / "install.ps1").read_text())
-        self.assertIn("--no-sync", (root / "install.sh").read_text())
+        self.assertIn("--python 3.13", (root / "install.ps1").read_text())
+        self.assertIn("--python 3.13", (root / "install.sh").read_text())
+        self.assertIn("--no-project", (root / "install.ps1").read_text())
+        self.assertIn("--no-project", (root / "install.sh").read_text())
 
 
 if __name__ == "__main__":

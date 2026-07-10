@@ -27,7 +27,10 @@ class InstallResolveMenuTest(unittest.TestCase):
             self.assertIn("subprocess.Popen", text)
             self.assertIn('os.name == "nt"', text)
             self.assertIn('".venv" / "bin" / "python"', text)
-            self.assertIn("Run uv sync", text)
+            self.assertIn("sys.version_info >= (3, 14)", text)
+            self.assertIn('"--python"', text)
+            self.assertIn('"3.13"', text)
+            self.assertIn("Run uv sync --python 3.13", text)
 
     def test_default_utility_dir_uses_linux_resolve_script_folder(self):
         with (

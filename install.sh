@@ -35,10 +35,4 @@ if [ -z "$uv_bin" ]; then
 fi
 
 script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-if command -v python3 >/dev/null 2>&1; then
-    python3 "$script_dir/install.py" "$@"
-elif command -v python >/dev/null 2>&1; then
-    python "$script_dir/install.py" "$@"
-else
-    "$uv_bin" run --no-sync python "$script_dir/install.py" "$@"
-fi
+RESOLVE_TIME_TRACKER_UV="$uv_bin" "$uv_bin" run --python 3.13 --no-project python "$script_dir/install.py" "$@"

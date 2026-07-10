@@ -7,7 +7,7 @@ name = "resolve-time-tracker"
 version = "0.1.0"
 description = "MIT open-source time tracker for DaVinci Resolve Studio."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.14"
 license = "MIT"
 authors = [
   { name = "Resolve Time Tracker contributors" }

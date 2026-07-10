@@ -49,14 +49,41 @@ def run_electron_companion(db_path: Path) -> int:
     if npm is None:
         raise RuntimeError("npm is required to launch the Electron companion")
     env = os.environ.copy()
-    env["RESOLVE_TIME_TRACKER_PYTHON"] = sys.executable
+    python = Path(sys.executable)
+    if os.name == "nt" and python.name.lower() == "pythonw.exe":
+        console_python = python.with_name("python.exe")
+        if console_python.is_file():
+            python = console_python
+    command = [npm, "run", "desktop", "--", "--db", str(db_path)]
+    if _python_has_sidecar_deps(python):
+        command.extend(["--python", str(python)])
+        env["RESOLVE_TIME_TRACKER_PYTHON"] = str(python)
     return subprocess.run(
-        [npm, "run", "desktop", "--", "--db", str(db_path)],
+        command,
         cwd=frontend_dir,
         env=env,
         creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
         check=False,
     ).returncode
+
+
+def _python_has_sidecar_deps(python: Path) -> bool:
+    try:
+        return (
+            subprocess.run(
+                [
+                    str(python),
+                    "-c",
+                    "import sys; assert sys.version_info < (3, 14); import fastapi, uvicorn",
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            ).returncode
+            == 0
+        )
+    except OSError:
+        return False
 
 
 def main(argv: list[str] | None = None) -> int:

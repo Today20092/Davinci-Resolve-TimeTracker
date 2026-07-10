@@ -101,7 +101,7 @@ More detail lives in [docs/platform-support.md](docs/platform-support.md).
 The platform installer:
 
 - Installs `uv` with Astral's official installer if missing.
-- Creates or reuses the project `.venv`.
+- Syncs the project `.venv` with `uv` on Python 3.13.
 - Installs and builds the Electron companion UI from `frontend/`.
 - Installs `ResolveTimeTrackerMenu.py` into Resolve's Scripts/Utility folder.
 - Verifies the Resolve menu script points at this checkout.
@@ -111,7 +111,7 @@ The platform installer:
 This project targets Python because DaVinci Resolve exposes Python scripting.
 
 ```powershell
-uv sync
+uv sync --python 3.13
 uv run ruff format .
 uv run ruff check .
 uv run --python 3.13 scripts/ResolveTimeTracker.py --version

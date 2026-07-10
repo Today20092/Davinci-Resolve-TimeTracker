@@ -51,12 +51,46 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 
 REPO_ROOT = Path(r"{repo_root}")
 env = os.environ.copy()
 env["RESOLVE_TIME_TRACKER_REPO"] = str(REPO_ROOT)
+
+def valid_python(candidate):
+    try:
+        return subprocess.run(
+            [str(candidate), "-c", "import sys; raise SystemExit(sys.version_info >= (3, 14))"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        ).returncode == 0
+    except OSError:
+        return False
+
+def find_uv():
+    candidates = [
+        "uv.exe" if os.name == "nt" else "uv",
+        Path.home() / ".local" / "bin" / ("uv.exe" if os.name == "nt" else "uv"),
+        Path(os.environ.get("APPDATA", "")) / "uv" / "uv.exe",
+        Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "uv" / "uv.exe",
+        Path.home() / ".cargo" / "bin" / ("uv.exe" if os.name == "nt" else "uv"),
+    ]
+    for candidate in candidates:
+        try:
+            if subprocess.run(
+                [str(candidate), "--version"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            ).returncode == 0:
+                return str(candidate)
+        except OSError:
+            pass
+    return None
+
 if os.name == "nt":
     candidates = [
         REPO_ROOT / ".venv" / "Scripts" / "pythonw.exe",
@@ -67,11 +101,24 @@ else:
         REPO_ROOT / ".venv" / "bin" / "pythonw",
         REPO_ROOT / ".venv" / "bin" / "python",
     ]
-python = next((candidate for candidate in candidates if candidate.exists()), None)
-if python is None:
-    raise RuntimeError(f"Run uv sync before launching Resolve Time Tracker: {{REPO_ROOT / '.venv'}}")
+python = next((candidate for candidate in candidates if candidate.exists() and valid_python(candidate)), None)
+command = None
+if python is not None:
+    command = [str(python), str(REPO_ROOT / "scripts" / "ResolveTimeTracker.py"), "--companion"]
+else:
+    uv = find_uv()
+    if uv is None:
+        raise RuntimeError(f"Run uv sync --python 3.13 before launching Resolve Time Tracker: {{REPO_ROOT / '.venv'}}")
+    command = [
+        uv,
+        "run",
+        "--python",
+        "3.13",
+        "scripts/ResolveTimeTracker.py",
+        "--companion",
+    ]
 subprocess.Popen(
-    [str(python), str(REPO_ROOT / "scripts" / "ResolveTimeTracker.py"), "--companion"],
+    command,
     cwd=str(REPO_ROOT),
     env=env,
 )

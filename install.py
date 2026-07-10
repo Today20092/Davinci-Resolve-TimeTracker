@@ -12,6 +12,7 @@ from pathlib import Path
 
 
 REPO_URL = "https://github.com/Today20092/Davinci-Resolve-TimeTracker.git"
+PYTHON_VERSION = "3.13"
 
 
 def is_source_checkout(path: Path) -> bool:
@@ -57,6 +58,9 @@ def ensure_source(source_dir: Path, repo_url: str) -> None:
 
 
 def uv_command() -> list[str] | None:
+    configured = os.environ.get("RESOLVE_TIME_TRACKER_UV")
+    if configured:
+        return [configured]
     uv = shutil.which("uv")
     if uv is not None:
         return [uv]
@@ -91,15 +95,19 @@ def venv_python(source_dir: Path) -> Path | None:
 
 
 def install_menu(source_dir: Path, uv: list[str], utility_dir: Path | None) -> Path:
+    run([*uv, "sync", "--python", PYTHON_VERSION], cwd=source_dir)
     python = venv_python(source_dir)
-    if python is None:
-        run([*uv, "sync"], cwd=source_dir)
-        python = venv_python(source_dir)
     if python is None:
         raise RuntimeError(
             f"uv sync did not create a virtualenv Python under {source_dir / '.venv'}"
         )
-    command = [str(python), "scripts/install_resolve_menu.py"]
+    command = [
+        *uv,
+        "run",
+        "--python",
+        PYTHON_VERSION,
+        "scripts/install_resolve_menu.py",
+    ]
     if utility_dir is not None:
         command.extend(["--utility-dir", str(utility_dir)])
     output = run(command, cwd=source_dir)
