@@ -21,11 +21,13 @@ Resolve Time Tracker installs as a DaVinci Resolve Scripts-menu tool. After inst
 Workspace > Scripts > ResolveTimeTrackerMenu
 ```
 
-### Windows
+| Platform | Download | Run |
+| --- | --- | --- |
+| Windows | [install.ps1](https://raw.githubusercontent.com/Today20092/Davinci-Resolve-TimeTracker/main/install.ps1) | Right-click the file and choose **Run with PowerShell**. |
+| macOS | [install.sh](https://raw.githubusercontent.com/Today20092/Davinci-Resolve-TimeTracker/main/install.sh) | `sh ~/Downloads/install.sh` |
+| Linux | [install.sh](https://raw.githubusercontent.com/Today20092/Davinci-Resolve-TimeTracker/main/install.sh) | `sh ~/Downloads/install.sh` |
 
-Download [install.ps1](https://raw.githubusercontent.com/Today20092/Davinci-Resolve-TimeTracker/main/install.ps1), then right-click it and choose **Run with PowerShell**.
-
-If Windows blocks the downloaded script, open PowerShell in your Downloads folder and run:
+If Windows blocks `install.ps1`, open PowerShell in your Downloads folder and run:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install.ps1
@@ -33,22 +35,6 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 
 The installer downloads the project source, installs Python dependencies, builds the companion app, and adds the DaVinci Resolve menu script.
 It asks whether tracking should stay manual or start automatically with your computer. Manual start is the default.
-
-### macOS
-
-Download [install.sh](https://raw.githubusercontent.com/Today20092/Davinci-Resolve-TimeTracker/main/install.sh), then run it from Terminal:
-
-```sh
-sh ~/Downloads/install.sh
-```
-
-### Linux
-
-Download [install.sh](https://raw.githubusercontent.com/Today20092/Davinci-Resolve-TimeTracker/main/install.sh), then run it from Terminal:
-
-```sh
-sh ~/Downloads/install.sh
-```
 
 For Linux activity detection, install `xprintidle` and `xdotool` with your distro package manager. Without them, the tracker can still run, but it falls back to always-active tracking.
 
