@@ -43,8 +43,13 @@ def source_dir_for(installer_path: Path, requested: Path | None) -> Path:
     return default_source_dir()
 
 
-def ensure_source(source_dir: Path, repo_url: str) -> None:
+def ensure_source(source_dir: Path, repo_url: str, update: bool) -> None:
     if is_source_checkout(source_dir):
+        print(f"[3/7] Using existing source checkout: {source_dir}", flush=True)
+        git = shutil.which("git")
+        if update and git is not None and (source_dir / ".git").is_dir():
+            print("[3/7] Updating source checkout...", flush=True)
+            run([git, "pull", "--ff-only"], cwd=source_dir)
         return
     if source_dir.exists():
         raise RuntimeError(
@@ -54,6 +59,7 @@ def ensure_source(source_dir: Path, repo_url: str) -> None:
     if git is None:
         raise RuntimeError("git is required to clone Resolve Time Tracker source")
     source_dir.parent.mkdir(parents=True, exist_ok=True)
+    print(f"[3/7] Cloning source to {source_dir}", flush=True)
     run([git, "clone", repo_url, str(source_dir)])
 
 
@@ -74,6 +80,7 @@ def uv_command() -> list[str] | None:
 def ensure_uv() -> list[str]:
     command = uv_command()
     if command is not None:
+        print(f"[4/7] Using uv: {' '.join(command)}", flush=True)
         return command
     raise RuntimeError(
         "uv is required. Run install.ps1 on Windows or install.sh on macOS/Linux."
@@ -95,6 +102,7 @@ def venv_python(source_dir: Path) -> Path | None:
 
 
 def install_menu(source_dir: Path, uv: list[str], utility_dir: Path | None) -> Path:
+    print("[6/7] Installing Python dependencies...", flush=True)
     run([*uv, "sync", "--python", PYTHON_VERSION], cwd=source_dir)
     python = venv_python(source_dir)
     if python is None:
@@ -110,6 +118,7 @@ def install_menu(source_dir: Path, uv: list[str], utility_dir: Path | None) -> P
     ]
     if utility_dir is not None:
         command.extend(["--utility-dir", str(utility_dir)])
+    print("[7/7] Installing DaVinci Resolve menu script...", flush=True)
     output = run(command, cwd=source_dir)
     target = Path(output.strip().splitlines()[-1])
     verify_menu_script(target, source_dir)
@@ -119,10 +128,12 @@ def install_menu(source_dir: Path, uv: list[str], utility_dir: Path | None) -> P
 def install_frontend(source_dir: Path) -> None:
     frontend_dir = source_dir / "frontend"
     if not (frontend_dir / "package.json").is_file():
+        print("[5/7] No frontend package found; skipping Electron companion.", flush=True)
         return
     npm = shutil.which("npm.cmd" if os.name == "nt" else "npm")
     if npm is None:
         raise RuntimeError("npm is required to install the Electron companion")
+    print("[5/7] Installing and building Electron companion...", flush=True)
     run([npm, "ci"], cwd=frontend_dir)
     run([npm, "run", "build"], cwd=frontend_dir)
 
@@ -165,8 +176,17 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    source_dir = source_dir_for(Path(__file__), args.source_dir)
-    ensure_source(source_dir, args.repo_url)
+    installer_path = Path(__file__)
+    source_dir = source_dir_for(installer_path, args.source_dir)
+    update_source = args.source_dir is None and not is_source_checkout(
+        installer_path.resolve().parent
+    )
+    print("Plan:", flush=True)
+    print(f"  - Source checkout: {source_dir}", flush=True)
+    print("  - Install/update frontend dependencies if the companion app is present.", flush=True)
+    print("  - Install the DaVinci Resolve Scripts menu entry.", flush=True)
+    print("", flush=True)
+    ensure_source(source_dir, args.repo_url, update_source)
     uv = ensure_uv()
     install_frontend(source_dir)
     target = install_menu(source_dir, uv, args.utility_dir)

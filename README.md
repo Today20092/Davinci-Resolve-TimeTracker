@@ -21,42 +21,37 @@ Workspace > Scripts > ResolveTimeTrackerMenu
 
 ### Windows
 
-From PowerShell in this checkout:
+Download [install.ps1](https://raw.githubusercontent.com/Today20092/Davinci-Resolve-TimeTracker/main/install.ps1), then right-click it and choose **Run with PowerShell**.
+
+If Windows blocks the downloaded script, open PowerShell in your Downloads folder and run:
 
 ```powershell
-.\install.ps1
+powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-If you do not have the checkout yet, clone or download this repository first.
-The installer also builds the Electron companion UI, so Node.js/npm must be available.
+The installer downloads the project source, installs Python dependencies, builds the companion app, and adds the DaVinci Resolve menu script.
 
 ### macOS
 
-From Terminal in this checkout:
+Download [install.sh](https://raw.githubusercontent.com/Today20092/Davinci-Resolve-TimeTracker/main/install.sh), then run it from Terminal:
 
 ```sh
-sh install.sh
+sh ~/Downloads/install.sh
 ```
 
 ### Linux
 
-From Terminal in this checkout:
+Download [install.sh](https://raw.githubusercontent.com/Today20092/Davinci-Resolve-TimeTracker/main/install.sh), then run it from Terminal:
 
 ```sh
-sh install.sh
+sh ~/Downloads/install.sh
 ```
 
 For Linux activity detection, install `xprintidle` and `xdotool` with your distro package manager. Without them, the tracker can still run, but it falls back to always-active tracking.
 
 ### Update
 
-From this checkout:
-
-```sh
-git pull
-```
-
-Then rerun the platform installer:
+Rerun the same installer you downloaded:
 
 ```powershell
 .\install.ps1
