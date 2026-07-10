@@ -151,6 +151,32 @@ class BootstrapInstallTest(unittest.TestCase):
         with patch("sys.stdin.isatty", return_value=False):
             self.assertEqual("manual", install.choose_startup_mode())
 
+    def test_startup_choice_accepts_yes_for_auto_start(self):
+        with (
+            patch("sys.stdin.isatty", return_value=True),
+            patch("builtins.input", return_value="yes"),
+        ):
+            self.assertEqual("auto", install.choose_startup_mode())
+
+    def test_startup_choice_accepts_no_for_manual_menu_start(self):
+        with (
+            patch("sys.stdin.isatty", return_value=True),
+            patch("builtins.input", return_value="no"),
+        ):
+            self.assertEqual("manual", install.choose_startup_mode())
+
+    def test_confirm_install_requires_yes_when_interactive(self):
+        with (
+            patch("sys.stdin.isatty", return_value=True),
+            patch("builtins.input", return_value="no"),
+        ):
+            self.assertFalse(install.confirm_install())
+        with (
+            patch("sys.stdin.isatty", return_value=True),
+            patch("builtins.input", return_value="y"),
+        ):
+            self.assertTrue(install.confirm_install())
+
     def test_installs_windows_startup_script(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

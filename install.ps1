@@ -9,6 +9,17 @@ Write-Host "  2. Download the Python installer if this file was run by itself."
 Write-Host "  3. Set up the source checkout, frontend, and DaVinci Resolve menu script."
 Write-Host ""
 
+function Confirm-Continue {
+    if (-not [Environment]::UserInteractive) {
+        return
+    }
+    $answer = Read-Host "Do you want to continue? [y/N]"
+    if ($answer -notmatch '^(y|yes)$') {
+        Write-Host "Install cancelled."
+        exit 0
+    }
+}
+
 function Find-Uv {
     $uv = Get-Command uv -ErrorAction SilentlyContinue
     if ($uv) {
@@ -27,6 +38,8 @@ function Find-Uv {
     }
     return $null
 }
+
+Confirm-Continue
 
 $uv = Find-Uv
 if (-not $uv) {

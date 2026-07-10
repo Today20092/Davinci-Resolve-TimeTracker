@@ -10,6 +10,18 @@ echo "  2. Download the Python installer if this file was run by itself."
 echo "  3. Set up the source checkout, frontend, and DaVinci Resolve menu script."
 echo
 
+confirm_continue() {
+    if [ ! -t 0 ]; then
+        return 0
+    fi
+    printf 'Do you want to continue? [y/N] '
+    read answer
+    case "$answer" in
+        y|Y|yes|YES) return 0 ;;
+        *) echo "Install cancelled."; exit 0 ;;
+    esac
+}
+
 find_uv() {
     if command -v uv >/dev/null 2>&1; then
         command -v uv
@@ -23,6 +35,8 @@ find_uv() {
     done
     return 1
 }
+
+confirm_continue
 
 uv_bin="$(find_uv || true)"
 if [ -z "$uv_bin" ]; then
