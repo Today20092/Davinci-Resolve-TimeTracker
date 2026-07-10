@@ -176,6 +176,8 @@ class BootstrapInstallTest(unittest.TestCase):
         text = (root / "frontend" / "electron" / "main.cjs").read_text()
 
         self.assertIn("async function apiIsRunning", text)
+        self.assertIn("async function apiSupportsPdf", text)
+        self.assertIn('"reportlab"', text)
         self.assertIn("if (!(await apiIsRunning()))", text)
         self.assertIn("startSidecar()", text)
 

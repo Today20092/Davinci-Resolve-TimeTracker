@@ -6,10 +6,10 @@ const path = require("node:path")
 
 const frontendRoot = path.resolve(__dirname, "..")
 const repoRoot = path.resolve(frontendRoot, "..")
-const apiPort = Number(
+let apiPort = Number(
   process.env.RESOLVE_TIME_TRACKER_API_PORT || readArg("--port") || 8765
 )
-const apiBase = `http://127.0.0.1:${apiPort}`
+let apiBase = `http://127.0.0.1:${apiPort}`
 let sidecar = null
 let smokeFinished = false
 
@@ -35,6 +35,8 @@ function startSidecar() {
         "3.13",
         "--with",
         "fastapi",
+        "--with",
+        "reportlab",
         "--with",
         "uvicorn",
         "scripts/ResolveTimeTracker.py",
@@ -89,6 +91,46 @@ async function apiIsRunning(timeoutMs = 250) {
     return false
   }
 }
+
+async function apiSupportsPdf(timeoutMs = 250) {
+  try {
+    const paths = await new Promise((resolve, reject) => {
+      const request = http.get(`${apiBase}/openapi.json`, (response) => {
+        let body = ""
+        response.setEncoding("utf8")
+        response.on("data", (chunk) => {
+          body += chunk
+        })
+        response.on("end", () => {
+          if (response.statusCode !== 200) {
+            reject(new Error(`status ${response.statusCode}`))
+            return
+          }
+          resolve(JSON.parse(body).paths || {})
+        })
+      })
+      request.on("error", reject)
+      request.setTimeout(timeoutMs, () => {
+        request.destroy(new Error("timeout"))
+      })
+    })
+    return Object.hasOwn(paths, "/export.pdf")
+  } catch {
+    return false
+  }
+}
+
+function useNextApiPort() {
+  apiPort += 1
+  apiBase = `http://127.0.0.1:${apiPort}`
+}
+
+async function chooseApiPort() {
+  while ((await apiIsRunning()) && !(await apiSupportsPdf())) {
+    useNextApiPort()
+  }
+}
+
 
 function finishSmoke(ok, message = null) {
   if (smokeFinished) {
@@ -160,6 +202,7 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   try {
+    await chooseApiPort()
     if (!(await apiIsRunning())) {
       startSidecar()
     }

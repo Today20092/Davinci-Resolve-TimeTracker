@@ -75,7 +75,7 @@ def _python_has_sidecar_deps(python: Path) -> bool:
                 [
                     str(python),
                     "-c",
-                    "import sys; assert sys.version_info < (3, 14); import fastapi, uvicorn",
+                    "import sys; assert sys.version_info < (3, 14); import fastapi, reportlab, uvicorn",
                 ],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
