@@ -44,14 +44,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return args
 
 
+def _is_windows() -> bool:
+    return os.name == "nt"
+
+
 def run_electron_companion(db_path: Path) -> int:
     frontend_dir = REPO_ROOT / "frontend"
-    npm = shutil.which("npm.cmd" if os.name == "nt" else "npm")
+    npm = shutil.which("npm.cmd" if _is_windows() else "npm")
     if npm is None:
         raise RuntimeError("npm is required to launch the Electron companion")
     env = os.environ.copy()
     python = Path(sys.executable)
-    if os.name == "nt" and python.name.lower() == "pythonw.exe":
+    if _is_windows() and python.name.lower() == "pythonw.exe":
         console_python = python.with_name("python.exe")
         if console_python.is_file():
             python = console_python
@@ -63,7 +67,9 @@ def run_electron_companion(db_path: Path) -> int:
         command,
         cwd=frontend_dir,
         env=env,
-        creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        if _is_windows()
+        else 0,
         check=False,
     ).returncode
 
