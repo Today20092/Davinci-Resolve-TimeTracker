@@ -55,8 +55,9 @@ def run_electron_companion(db_path: Path) -> int:
         raise RuntimeError("npm is required to launch the Electron companion")
     env = os.environ.copy()
     python = Path(sys.executable)
-    if _is_windows() and python.name.lower() == "pythonw.exe":
-        console_python = python.with_name("python.exe")
+    python_text = str(python)
+    if _is_windows() and python_text.lower().endswith("pythonw.exe"):
+        console_python = Path(f"{python_text[:-11]}python.exe")
         if console_python.is_file():
             python = console_python
     command = [npm, "run", "desktop", "--", "--db", str(db_path)]
