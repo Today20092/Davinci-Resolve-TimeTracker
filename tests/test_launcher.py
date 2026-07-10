@@ -1,4 +1,5 @@
 import os
+import subprocess
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -52,6 +53,7 @@ class LauncherTest(unittest.TestCase):
         with (
             patch("shutil.which", return_value="npm"),
             patch("subprocess.run") as run,
+            patch("scripts.ResolveTimeTracker.os.name", "nt"),
             patch.dict(os.environ, {}, clear=True),
         ):
             run.return_value.returncode = 0
@@ -63,3 +65,4 @@ class LauncherTest(unittest.TestCase):
         self.assertEqual(["npm", "run", "desktop", "--"], command[:4])
         self.assertIn("--db", command)
         self.assertIn("RESOLVE_TIME_TRACKER_PYTHON", env)
+        self.assertEqual(subprocess.CREATE_NO_WINDOW, run.call_args.kwargs["creationflags"])

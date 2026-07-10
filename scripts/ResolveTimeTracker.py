@@ -54,6 +54,7 @@ def run_electron_companion(db_path: Path) -> int:
         [npm, "run", "desktop", "--", "--db", str(db_path)],
         cwd=frontend_dir,
         env=env,
+        creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
         check=False,
     ).returncode
 
