@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useState } from "react"
-import { Bar, BarChart, LabelList, Pie, PieChart, XAxis, YAxis } from "recharts"
+import {
+  Bar,
+  BarChart,
+  Cell,
+  LabelList,
+  Pie,
+  PieChart,
+  Label as RechartsLabel,
+  XAxis,
+  YAxis,
+} from "recharts"
 import {
   IconDeviceFloppy,
   IconDownload,
@@ -73,6 +83,10 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@/components/ui/toggle-group"
 
 const emptyStatus: Status = {
   connection: "waiting",
@@ -91,7 +105,20 @@ type Dashboard = Awaited<ReturnType<typeof sidecar.loadDashboard>>
 
 const pageChartConfig = {
   seconds: { label: "Tracked time", color: "var(--chart-1)" },
+  page1: { color: "var(--chart-1)" },
+  page2: { color: "var(--chart-2)" },
+  page3: { color: "var(--chart-3)" },
+  page4: { color: "var(--chart-4)" },
+  page5: { color: "var(--chart-5)" },
 } satisfies ChartConfig
+
+const pageChartColors = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+]
 
 const activityChartConfig = {
   editing: { label: "Editing", color: "var(--chart-2)" },
@@ -167,6 +194,10 @@ function App() {
   )
 
   const pageChartData = projectDashboard.pageData
+  const pageDonutData = pageChartData.map((item, index) => ({
+    ...item,
+    fill: pageChartColors[index % pageChartColors.length],
+  }))
   const activityChartData = [
     {
       activity: "editing",
@@ -255,9 +286,10 @@ function App() {
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <StatusBadge value={status.connection} />
               <TrackingBadge live={isLive} enabled={status.tracking_enabled} />
-              <span>Page: {status.page}</span>
-              <span>Elapsed: {status.active_elapsed}</span>
-              <span>Signal: {status.heartbeat}</span>
+              <InfoBadge label="Page" value={status.page} />
+              {isLive && (
+                <InfoBadge label="Session" value={status.active_elapsed} />
+              )}
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -348,44 +380,97 @@ function App() {
                     ) : (
                       <ChartContainer
                         config={pageChartConfig}
-                        className="h-64 w-full"
+                        className="mx-auto h-72 max-w-3xl"
                         initialDimension={{ width: 800, height: 256 }}
                       >
-                        <BarChart
-                          accessibilityLayer
-                          data={pageChartData}
-                          layout="vertical"
-                          barCategoryGap={12}
-                          margin={{ left: 0, right: 48 }}
-                        >
-                          <XAxis dataKey="seconds" hide type="number" />
-                          <YAxis
-                            dataKey="page"
-                            axisLine={false}
-                            tickLine={false}
-                            type="category"
-                            width={64}
-                          />
+                        <PieChart accessibilityLayer>
                           <ChartTooltip
                             content={
                               <ChartTooltipContent
-                                formatter={(value) => duration(Number(value))}
+                                hideLabel
+                                hideIndicator
+                                formatter={(value, _name, item) => (
+                                  <div className="flex min-w-32 items-center gap-2">
+                                    <span
+                                      className="size-2.5 shrink-0 rounded-sm"
+                                      style={{
+                                        backgroundColor: item.payload.fill,
+                                      }}
+                                    />
+                                    <span className="capitalize">
+                                      {item.payload.page}
+                                    </span>
+                                    <span className="ml-auto font-mono font-medium">
+                                      {duration(Number(value))}
+                                    </span>
+                                  </div>
+                                )}
                               />
                             }
                           />
-                          <Bar
+                          <Pie
+                            data={pageDonutData}
                             dataKey="seconds"
-                            fill="var(--color-seconds)"
-                            radius={4}
+                            nameKey="page"
+                            innerRadius={68}
+                            outerRadius={104}
+                            paddingAngle={2}
                           >
-                            <LabelList
-                              dataKey="seconds"
-                              formatter={(value) => duration(Number(value))}
-                              position="right"
+                            <RechartsLabel
+                              content={({ viewBox }) => {
+                                if (!viewBox || !("cx" in viewBox)) return null
+                                const topPage = pageDonutData[0]
+                                return (
+                                  <text
+                                    x={viewBox.cx}
+                                    y={viewBox.cy}
+                                    textAnchor="middle"
+                                    dominantBaseline="middle"
+                                  >
+                                    <tspan
+                                      x={viewBox.cx}
+                                      y={Number(viewBox.cy) - 6}
+                                      className="fill-foreground text-lg font-semibold"
+                                    >
+                                      {topPage.page}
+                                    </tspan>
+                                    <tspan
+                                      x={viewBox.cx}
+                                      y={Number(viewBox.cy) + 16}
+                                      className="fill-muted-foreground"
+                                    >
+                                      {duration(topPage.seconds)}
+                                    </tspan>
+                                  </text>
+                                )
+                              }}
                             />
-                          </Bar>
-                        </BarChart>
+                          </Pie>
+                        </PieChart>
                       </ChartContainer>
+                    )}
+                    {pageDonutData.length > 0 && (
+                      <div className="mx-auto mt-3 grid max-w-3xl gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                        {pageDonutData.map((item) => (
+                          <div
+                            key={item.page}
+                            className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
+                          >
+                            <span className="flex min-w-0 items-center gap-2">
+                              <span
+                                className="size-2.5 shrink-0 rounded-sm"
+                                style={{ backgroundColor: item.fill }}
+                              />
+                              <span className="truncate capitalize">
+                                {item.page}
+                              </span>
+                            </span>
+                            <span className="font-mono text-xs text-muted-foreground">
+                              {duration(item.seconds)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </CardContent>
                 </Card>
@@ -687,23 +772,55 @@ function App() {
                                 className="h-72 w-full"
                                 initialDimension={{ width: 360, height: 288 }}
                               >
-                                <PieChart accessibilityLayer>
-                                  <Pie
+                                <BarChart
+                                  accessibilityLayer
                                     data={activityChartData}
-                                    dataKey="seconds"
-                                    nameKey="label"
-                                    innerRadius={58}
-                                    outerRadius={92}
-                                    paddingAngle={2}
+                                    margin={{ top: 24, right: 8, left: 8 }}
                                   >
-                                    <LabelList
-                                      dataKey="seconds"
-                                      formatter={(value) =>
-                                        duration(Number(value))
+                                    <XAxis
+                                      dataKey="label"
+                                      axisLine={false}
+                                      tickLine={false}
+                                    />
+                                    <YAxis hide type="number" />
+                                    <ChartTooltip
+                                      content={
+                                        <ChartTooltipContent
+                                          hideLabel
+                                          formatter={(value, _name, item) => (
+                                            <div className="flex min-w-32 items-center gap-2">
+                                              <span
+                                                className="size-2.5 shrink-0 rounded-sm"
+                                                style={{
+                                                  backgroundColor:
+                                                    item.payload.fill,
+                                                }}
+                                              />
+                                              <span>{item.payload.label}</span>
+                                              <span className="ml-auto font-mono font-medium">
+                                                {duration(Number(value))}
+                                              </span>
+                                            </div>
+                                          )}
+                                        />
                                       }
                                     />
-                                  </Pie>
-                                </PieChart>
+                                    <Bar dataKey="seconds" radius={4}>
+                                      {activityChartData.map((item) => (
+                                        <Cell
+                                          key={item.activity}
+                                          fill={item.fill}
+                                        />
+                                      ))}
+                                      <LabelList
+                                        dataKey="seconds"
+                                        formatter={(value) =>
+                                          duration(Number(value))
+                                        }
+                                        position="top"
+                                      />
+                                    </Bar>
+                                  </BarChart>
                               </ChartContainer>
                             )}
                           </CardContent>
@@ -772,17 +889,22 @@ function App() {
                     </Button>
                   </div>
                   <Label htmlFor="theme">Theme</Label>
-                  <Select value={theme} onValueChange={setTheme}>
-                    <SelectTrigger id="theme" className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        <SelectItem value="light">Light</SelectItem>
-                        <SelectItem value="dark">Dark</SelectItem>
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
+                  <ToggleGroup
+                    id="theme"
+                    type="single"
+                    value={theme}
+                    variant="outline"
+                    spacing={0}
+                    className="w-full"
+                    onValueChange={(value) => value && setTheme(value)}
+                  >
+                    <ToggleGroupItem className="flex-1" value="light">
+                      Light
+                    </ToggleGroupItem>
+                    <ToggleGroupItem className="flex-1" value="dark">
+                      Dark
+                    </ToggleGroupItem>
+                  </ToggleGroup>
                 </div>
               </CardContent>
             </Card>
@@ -896,6 +1018,15 @@ function TrackingBadge({ live, enabled }: { live: boolean; enabled: boolean }) {
       }
     >
       {live ? "Tracking now" : "Waiting for activity"}
+    </Badge>
+  )
+}
+
+function InfoBadge({ label, value }: { label: string; value: string }) {
+  return (
+    <Badge variant="outline" className="font-normal capitalize">
+      <span className="text-muted-foreground">{label}</span>
+      {value}
     </Badge>
   )
 }
