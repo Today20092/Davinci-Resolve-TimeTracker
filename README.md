@@ -112,6 +112,10 @@ The platform installer:
 
 ## Architecture
 
+### Runtime Flow
+
+How Resolve, the desktop companion, the local Python sidecar, and local storage talk to each other while the tracker is running.
+
 ```mermaid
 flowchart LR
   User["Editor"] --> Menu["Resolve Scripts menu<br/>ResolveTimeTrackerMenu.py"]
@@ -163,6 +167,10 @@ flowchart LR
   class Store,Csv data
 ```
 
+### Install Flow
+
+What the one-file installer prepares before the menu item appears inside DaVinci Resolve.
+
 ```mermaid
 flowchart TD
   Install["install.ps1 / install.sh"] --> Installer["install.py"]
@@ -171,7 +179,7 @@ flowchart TD
   Installer --> Frontend["npm ci + npm run build"]
   Installer --> MenuInstall["scripts/install_resolve_menu.py"]
   MenuInstall --> Launcher["Resolve Scripts/Utility<br/>ResolveTimeTrackerMenu.py"]
-  Launcher --> Companion["Launch --companion from this checkout"]
+  Launcher --> Companion["Launch tracker companion"]
 
   classDef bootstrap fill:#fff7ed,stroke:#f97316,color:#7c2d12
   classDef setup fill:#eef2ff,stroke:#4f46e5,color:#312e81
