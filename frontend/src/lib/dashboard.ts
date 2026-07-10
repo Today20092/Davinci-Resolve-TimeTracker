@@ -12,6 +12,12 @@ export type ProjectDashboard = {
   pageData: Array<{ page: string; seconds: number }>
 }
 
+export type ProjectExportSummary = {
+  project: string
+  generatedAt: string
+  dateRange: string
+}
+
 export function currentProjectDashboard(
   sessions: Session[],
   status: Pick<Status, "project" | "page" | "state" | "active_elapsed_seconds">
@@ -85,6 +91,35 @@ export function currentProjectDashboard(
   }
 }
 
+export function projectExportSummary(
+  dashboard: ProjectDashboard,
+  sessions: Session[],
+  generatedAt = new Date()
+): ProjectExportSummary | null {
+  if (!dashboard.project) return null
+
+  const projectSessions = sessions.filter(
+    (session) => session.project_name === dashboard.project
+  )
+  const starts = projectSessions
+    .map((session) => session.started_at_utc)
+    .filter(Boolean)
+    .sort()
+  const ends = projectSessions
+    .map((session) => session.ended_at_utc)
+    .filter(Boolean)
+    .sort()
+
+  return {
+    project: dashboard.project,
+    generatedAt: generatedAt.toLocaleDateString("en-US"),
+    dateRange:
+      starts.length && ends.length
+        ? `${formatDate(starts[0])} - ${formatDate(ends.at(-1) ?? starts[0])}`
+        : "Live project time",
+  }
+}
+
 function emptyDashboard(): ProjectDashboard {
   return {
     project: null,
@@ -97,4 +132,13 @@ function emptyDashboard(): ProjectDashboard {
     recentSessions: [],
     pageData: [],
   }
+}
+
+function formatDate(value: string) {
+  const normalized = value.includes("T") ? value : value.replace(" ", "T")
+  const date = new Date(
+    normalized.endsWith("Z") ? normalized : `${normalized}Z`
+  )
+  if (Number.isNaN(date.getTime())) return value.split("T")[0]
+  return date.toLocaleDateString("en-US")
 }

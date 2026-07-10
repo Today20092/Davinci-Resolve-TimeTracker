@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { Bar, BarChart, LabelList, XAxis, YAxis } from "recharts"
+import { Bar, BarChart, LabelList, Pie, PieChart, XAxis, YAxis } from "recharts"
 import {
   IconDeviceFloppy,
   IconDownload,
@@ -7,6 +7,7 @@ import {
   IconPencil,
   IconPlayerPause,
   IconPlayerPlay,
+  IconPrinter,
   IconRefresh,
 } from "@tabler/icons-react"
 
@@ -19,7 +20,7 @@ import {
   type Settings,
   type Status,
 } from "@/lib/api"
-import { currentProjectDashboard } from "@/lib/dashboard"
+import { currentProjectDashboard, projectExportSummary } from "@/lib/dashboard"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -90,6 +91,11 @@ const pageChartConfig = {
   seconds: { label: "Tracked time", color: "var(--chart-1)" },
 } satisfies ChartConfig
 
+const activityChartConfig = {
+  editing: { label: "Editing", color: "var(--chart-2)" },
+  rendering: { label: "Rendering", color: "var(--chart-4)" },
+} satisfies ChartConfig
+
 function App() {
   const [status, setStatus] = useState<Status>(emptyStatus)
   const [projects, setProjects] = useState<ProjectSummary[]>([])
@@ -151,6 +157,21 @@ function App() {
   )
 
   const pageChartData = projectDashboard.pageData
+  const activityChartData = [
+    {
+      activity: "editing",
+      label: "Editing",
+      seconds: projectDashboard.editingSeconds,
+      fill: "var(--color-editing)",
+    },
+    {
+      activity: "rendering",
+      label: "Rendering",
+      seconds: projectDashboard.renderingSeconds,
+      fill: "var(--color-rendering)",
+    },
+  ].filter((item) => item.seconds > 0)
+  const exportSummary = projectExportSummary(projectDashboard, sessions)
 
   const projectName =
     status.project === "none" ? "No Resolve project detected" : status.project
@@ -241,6 +262,7 @@ function App() {
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
             <TabsTrigger value="projects">Projects</TabsTrigger>
             <TabsTrigger value="sessions">Page activity</TabsTrigger>
+            <TabsTrigger value="export">Export</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
 
@@ -447,6 +469,169 @@ function App() {
                 </Table>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="export">
+            {!exportSummary ? (
+              <Empty className="min-h-96 rounded-lg border">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <IconDownload />
+                  </EmptyMedia>
+                  <EmptyTitle>No project to export</EmptyTitle>
+                  <EmptyDescription>
+                    Open a Resolve project before creating a client report.
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            ) : (
+              <section className="export-report flex flex-col gap-4">
+                <div className="no-print flex justify-end">
+                  <Button onClick={() => window.print()}>
+                    <IconPrinter data-icon="inline-start" />
+                    Save PDF
+                  </Button>
+                </div>
+
+                <div className="rounded-lg border bg-card p-6 text-card-foreground">
+                  <div className="flex flex-col gap-4 border-b pb-5 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">
+                        Resolve Time Report
+                      </p>
+                      <h2 className="mt-1 text-3xl font-semibold">
+                        {exportSummary.project}
+                      </h2>
+                    </div>
+                    <div className="text-sm text-muted-foreground sm:text-right">
+                      <p>Generated {exportSummary.generatedAt}</p>
+                      <p>{exportSummary.dateRange}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <Metric
+                      title="Total tracked"
+                      value={duration(projectDashboard.trackedSeconds)}
+                    />
+                    <Metric
+                      title="Editing"
+                      value={duration(projectDashboard.editingSeconds)}
+                    />
+                    <Metric
+                      title="Rendering"
+                      value={duration(projectDashboard.renderingSeconds)}
+                    />
+                    <Metric
+                      title="Page rows"
+                      value={String(projectDashboard.sessionCount)}
+                    />
+                  </div>
+
+                  <div className="mt-5 grid gap-4 lg:grid-cols-[1.5fr_1fr]">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Time by page</CardTitle>
+                        <CardDescription>
+                          DaVinci Resolve page activity
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        {pageChartData.length === 0 ? (
+                          <ChartEmpty />
+                        ) : (
+                          <ChartContainer
+                            config={pageChartConfig}
+                            className="h-72 w-full"
+                            initialDimension={{ width: 800, height: 288 }}
+                          >
+                            <BarChart
+                              accessibilityLayer
+                              data={pageChartData}
+                              layout="vertical"
+                              barCategoryGap={12}
+                              margin={{ left: 0, right: 56 }}
+                            >
+                              <XAxis dataKey="seconds" hide type="number" />
+                              <YAxis
+                                dataKey="page"
+                                axisLine={false}
+                                tickLine={false}
+                                type="category"
+                                width={72}
+                              />
+                              <Bar
+                                dataKey="seconds"
+                                fill="var(--color-seconds)"
+                                radius={4}
+                              >
+                                <LabelList
+                                  dataKey="seconds"
+                                  formatter={(value) => duration(Number(value))}
+                                  position="right"
+                                />
+                              </Bar>
+                            </BarChart>
+                          </ChartContainer>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Activity mix</CardTitle>
+                        <CardDescription>
+                          Editing and rendering time
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        {activityChartData.length === 0 ? (
+                          <ChartEmpty />
+                        ) : (
+                          <ChartContainer
+                            config={activityChartConfig}
+                            className="h-72 w-full"
+                            initialDimension={{ width: 360, height: 288 }}
+                          >
+                            <PieChart accessibilityLayer>
+                              <Pie
+                                data={activityChartData}
+                                dataKey="seconds"
+                                nameKey="label"
+                                innerRadius={58}
+                                outerRadius={92}
+                                paddingAngle={2}
+                              >
+                                <LabelList
+                                  dataKey="seconds"
+                                  formatter={(value) => duration(Number(value))}
+                                />
+                              </Pie>
+                            </PieChart>
+                          </ChartContainer>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <div className="mt-5">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Recent page activity</CardTitle>
+                        <CardDescription>
+                          Latest tracked rows for this project.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <ActivityTable
+                          sessions={projectDashboard.recentSessions}
+                        />
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+              </section>
+            )}
           </TabsContent>
 
           <TabsContent value="settings">
@@ -694,7 +879,9 @@ function shortDate(value: string) {
 function friendlyDateTime(value: string) {
   if (!value || value === "none") return "None yet"
   const normalized = value.includes("T") ? value : value.replace(" ", "T")
-  const date = new Date(normalized.endsWith("Z") ? normalized : `${normalized}Z`)
+  const date = new Date(
+    normalized.endsWith("Z") ? normalized : `${normalized}Z`
+  )
   if (Number.isNaN(date.getTime())) return shortDate(value).split(".")[0]
   return date.toLocaleString([], {
     month: "short",

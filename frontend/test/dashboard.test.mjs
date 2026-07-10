@@ -1,7 +1,10 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { currentProjectDashboard } from "../src/lib/dashboard.ts"
+import {
+  currentProjectDashboard,
+  projectExportSummary,
+} from "../src/lib/dashboard.ts"
 
 test("current project dashboard includes saved and live project time", () => {
   const dashboard = currentProjectDashboard(
@@ -45,4 +48,44 @@ test("current project dashboard includes saved and live project time", () => {
     { page: "Edit", seconds: 120 },
     { page: "Deliver", seconds: 30 },
   ])
+})
+
+test("project export summary reports the current project date range", () => {
+  const sessions = [
+    {
+      id: 1,
+      project_name: "Food Photography",
+      started_at_utc: "2026-07-01T12:00:00Z",
+      ended_at_utc: "2026-07-01T13:00:00Z",
+      duration_seconds: 3600,
+      duration: "1:00:00",
+      page: "Edit",
+      activity_category: "editing",
+    },
+    {
+      id: 2,
+      project_name: "Other Project",
+      started_at_utc: "2026-06-01T12:00:00Z",
+      ended_at_utc: "2026-06-01T13:00:00Z",
+      duration_seconds: 3600,
+      duration: "1:00:00",
+      page: "Color",
+      activity_category: "editing",
+    },
+  ]
+  const dashboard = currentProjectDashboard(sessions, {
+    project: "Food Photography",
+    page: "Edit",
+    state: "paused",
+    active_elapsed_seconds: 0,
+  })
+
+  assert.deepEqual(
+    projectExportSummary(dashboard, sessions, new Date("2026-07-10T12:00:00Z")),
+    {
+      project: "Food Photography",
+      generatedAt: "7/10/2026",
+      dateRange: "7/1/2026 - 7/1/2026",
+    }
+  )
 })
