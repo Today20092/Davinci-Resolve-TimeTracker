@@ -85,7 +85,9 @@ class LauncherTest(unittest.TestCase):
         self.assertIn("--db", command)
         self.assertIn("--python", command)
         self.assertIn("RESOLVE_TIME_TRACKER_PYTHON", env)
-        self.assertEqual(subprocess.CREATE_NO_WINDOW, run.call_args.kwargs["creationflags"])
+        self.assertEqual(
+            subprocess.CREATE_NO_WINDOW, run.call_args.kwargs["creationflags"]
+        )
 
     def test_companion_uses_uv_when_current_python_lacks_sidecar_deps(self):
         with (
@@ -111,7 +113,10 @@ class LauncherTest(unittest.TestCase):
             patch("shutil.which", return_value="npm"),
             patch("subprocess.run") as run,
             patch("scripts.ResolveTimeTracker.os.name", "nt"),
-            patch("scripts.ResolveTimeTracker.sys.executable", r"C:\app\.venv\Scripts\pythonw.exe"),
+            patch(
+                "scripts.ResolveTimeTracker.sys.executable",
+                r"C:\app\.venv\Scripts\pythonw.exe",
+            ),
             patch("scripts.ResolveTimeTracker.Path.is_file", return_value=True),
             patch.dict(os.environ, {}, clear=True),
         ):

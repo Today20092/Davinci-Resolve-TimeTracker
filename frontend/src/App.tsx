@@ -368,7 +368,7 @@ function App() {
                     <CardTitle>Time by page</CardTitle>
                     <CardDescription>
                       {projectDashboard.project} -{" "}
-                      {projectDashboard.sessionCount} page activity rows
+                      {projectDashboard.sessionCount} tracked sessions
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -459,7 +459,7 @@ function App() {
                   <CardHeader>
                     <CardTitle>Recent page activity</CardTitle>
                     <CardDescription>
-                      Latest rows saved for this project.
+                      Latest tracked sessions for this project.
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -513,7 +513,7 @@ function App() {
               <CardHeader>
                 <CardTitle>Page activity</CardTitle>
                 <CardDescription>
-                  {sessions.length} saved page activity rows
+                  {sessions.length} saved tracked sessions
                 </CardDescription>
                 <CardAction>
                   <Button variant="outline" onClick={exportCsv}>
@@ -675,7 +675,7 @@ function App() {
                         value={duration(projectDashboard.renderingSeconds)}
                       />
                       <Metric
-                        title="Page rows"
+                        title="Tracked sessions"
                         value={String(projectDashboard.sessionCount)}
                       />
                     </div>

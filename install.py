@@ -184,7 +184,9 @@ def choose_startup_mode(*, default: str = "manual") -> str:
 def install_frontend(source_dir: Path) -> None:
     frontend_dir = source_dir / "frontend"
     if not (frontend_dir / "package.json").is_file():
-        print("[5/7] No frontend package found; skipping Electron companion.", flush=True)
+        print(
+            "[5/7] No frontend package found; skipping Electron companion.", flush=True
+        )
         return
     npm = shutil.which("npm.cmd" if os.name == "nt" else "npm")
     if npm is None:
@@ -245,7 +247,10 @@ def main() -> int:
     )
     print("Plan:", flush=True)
     print(f"  - Source checkout: {source_dir}", flush=True)
-    print("  - Install/update frontend dependencies if the companion app is present.", flush=True)
+    print(
+        "  - Install/update frontend dependencies if the companion app is present.",
+        flush=True,
+    )
     print("  - Install the DaVinci Resolve Scripts menu entry.", flush=True)
     print("  - Ask before enabling background auto-start.", flush=True)
     print("", flush=True)
