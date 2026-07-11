@@ -17,7 +17,6 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from resolve_time_tracker import __version__
-from resolve_time_tracker.resolve_ui import run_resolve_ui
 
 
 def default_db_path() -> Path:
@@ -107,15 +106,7 @@ def main(argv: list[str] | None = None) -> int:
 
         run_api(args.db, host=args.host, port=args.port)
         return 0
-    if args.companion:
-        return run_electron_companion(args.db, background=args.background)
-    run_resolve_ui(
-        args.db,
-        resolve=globals().get("resolve"),
-        fusion=globals().get("fusion"),
-        bmd=globals().get("bmd"),
-    )
-    return 0
+    return run_electron_companion(args.db, background=args.background)
 
 
 if __name__ == "__main__":
