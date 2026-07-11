@@ -26,11 +26,21 @@ This document tracks product direction and project status. The README stays focu
 - Smoke-test Linux with a real Resolve Studio install.
 - Show a clear UI warning when Linux activity tools are missing.
 - Make duplicate launches focus the existing tracker window instead of failing invisibly.
-- Improve packaged release story for non-developer users.
 
 ## Later
 
 - Resolve Free compatibility investigation.
 - Better session editing and review workflow.
-- Optional packaged app builds.
 - More explicit platform diagnostics inside the companion UI.
+
+### Windows Packaged Release
+
+Build a zero-prerequisite, per-user Windows installer for regular users. The accepted design is recorded in [ADR 0002](adr/0002-windows-packaged-distribution.md).
+
+- Run a packaging spike and select the Electron installer and Python bundler.
+- Produce an unsigned Windows 10/11 x64 preview through GitHub Releases.
+- Support Start Menu, Resolve Scripts menu, tray startup, and legacy script-install migration.
+- Prove rollback-safe upgrades and native uninstall with data preserved by default.
+- Pass the clean-machine lifecycle test matrix.
+- Add code signing and checksums before declaring the installer production-ready.
+- Consider macOS packaging only after the Windows lifecycle is proven.

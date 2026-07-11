@@ -1,6 +1,6 @@
 # Resolve Time Tracker
 
-Resolve Time Tracker tracks billable editing time for DaVinci Resolve Free projects while preserving privacy and avoiding unattended-time false positives.
+Resolve Time Tracker tracks billable editing time for DaVinci Resolve Studio projects while preserving privacy and avoiding unattended-time false positives.
 
 ## Language
 
