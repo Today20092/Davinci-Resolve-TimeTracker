@@ -141,42 +141,26 @@ The platform installer:
 How Resolve, the desktop companion, the local Python sidecar, and local storage talk to each other while the tracker is running.
 
 ```mermaid
-flowchart LR
-  User["Editor"] -->|manual start| Menu["Resolve Scripts menu"]
-  Login["Windows sign-in"] -.->|optional automatic start| Launcher["Python launcher<br/>scripts/ResolveTimeTracker.py"]
-  Menu --> Launcher
+flowchart TD
+  Start{"How does it start?"}
+  Menu["You choose the tracker<br/>from Resolve's Scripts menu"] --> Start
+  Login["Windows starts it at sign-in<br/>if you enabled automatic startup"] --> Start
 
-  subgraph Desktop["Electron process"]
-    Electron["Main process<br/>window, tray, lifecycle"]
-    Preload["Preload bridge<br/>PDF save dialog only"]
-    React["Renderer<br/>React + Vite + shadcn/ui"]
-    Electron --> Preload --> React
-  end
+  Start --> App["Desktop app<br/>dashboard window + system tray"]
+  App --> Tracker["Background tracker<br/>keeps the timer running"]
 
-  subgraph Python["Python sidecar process"]
-    Api["FastAPI on 127.0.0.1<br/>commands + dashboard read model"]
-    Engine["TrackingEngine<br/>session and heartbeat rules"]
-    Bridge["ResolveBridge<br/>Resolve + OS activity snapshot"]
-    Store["SQLiteStore<br/>single owner of local data"]
-    Export["CSV + headless PDF exporters"]
-    Api --> Engine --> Bridge
-    Api --> Store
-    Engine --> Store
-    Api --> Export --> Store
-  end
+  Resolve["DaVinci Resolve<br/>project, page, and render status"] --> Tracker
+  Activity["Your computer<br/>active, idle, or Resolve in background"] --> Tracker
 
-  Resolve["DaVinci Resolve Studio<br/>external application"] <-->|local scripting API| Bridge
-  Os["Operating system<br/>foreground + idle signals"] --> Bridge
-  Db[("tracker.sqlite3<br/>projects, sessions, settings")] <-->|local file| Store
+  Tracker --> Decision{"Should this time count?"}
+  Decision -->|Yes| Database[("Private local database<br/>projects, time, and settings")]
+  Decision -->|No| Wait["Wait without adding time"]
+  Wait --> Tracker
 
-  Launcher --> Electron
-  Electron -->|starts if no compatible API exists| Api
-  React <-->|localhost REST| Api
-  Api -.->|SSE invalidation every 5s| React
-  Electron -.->|health check + restart| Api
-  React -->|desktop PDF: print visible report| Preload
+  Database --> App
+  App --> Reports["Dashboard, CSV,<br/>and PDF reports"]
 
-  Note["Closing the window does not stop tracking.<br/>The tray keeps Electron and Python running;<br/>Quit stops both."] -.-> Electron
+  Note["Closing the dashboard leaves the tracker running in the tray.<br/>Choose Quit from the tray to stop it completely."] -.-> App
 
   classDef user fill:#fff7ed,stroke:#f97316,color:#7c2d12
   classDef resolve fill:#eff6ff,stroke:#2563eb,color:#1e3a8a
@@ -185,10 +169,10 @@ flowchart LR
   classDef data fill:#fdf2f8,stroke:#db2777,color:#831843
 
   class User user
-  class Menu,Launcher,Resolve resolve
-  class Electron,Preload,React desktop
-  class Api,Engine,Bridge,Export backend
-  class Store,Db data
+  class Menu,Login,Resolve resolve
+  class App,Reports desktop
+  class Tracker,Decision,Activity,Wait backend
+  class Database data
 ```
 
 ### Install Flow
@@ -197,25 +181,28 @@ What the one-file installer prepares before the menu item appears inside DaVinci
 
 ```mermaid
 flowchart TD
-  Install["Run install.ps1 or install.sh"] --> Installer["install.py"]
-  Installer --> Source["Find, clone, or update source checkout"]
-  Source --> Python["uv sync<br/>Python 3.13 environment"]
-  Source --> Frontend["npm ci + npm run build<br/>Electron / React assets"]
-  Python --> MenuInstall["Install ResolveTimeTrackerMenu.py"]
-  Frontend --> MenuInstall
-  MenuInstall --> Menu["Always available:<br/>Workspace > Scripts menu start"]
-  MenuInstall --> Choice{"Start automatically?<br/>Windows only"}
-  Choice -->|No, default| Off["Nothing runs after sign-in<br/>until the menu item is used"]
-  Choice -->|Yes| Startup["Add hidden launcher to<br/>Windows Startup folder"]
-  Startup --> Background["At sign-in: Electron tray +<br/>Python sidecar run in background"]
+  Download["Download and run<br/>the installer for your computer"]
+  Download --> Prepare["The installer prepares<br/>the tracker and desktop app"]
+  Prepare --> Menu["The tracker is added to<br/>Resolve's Scripts menu"]
+  Prepare --> Choice{"Start tracking automatically<br/>when you sign in to Windows?"}
+
+  Choice -->|No — default| Manual["Nothing runs in the background<br/>until you start it from Resolve"]
+  Choice -->|Yes| Automatic["The tracker starts quietly<br/>in the system tray at sign-in"]
+
+  Manual --> Ready["Installation complete"]
+  Automatic --> Ready
+  Menu --> Ready
+  Ready --> Use["Open Resolve and choose<br/>Workspace → Scripts → ResolveTimeTrackerMenu"]
+
+  Note["Automatic startup is currently a Windows-only option.<br/>You can always start the tracker manually from Resolve."] -.-> Choice
 
   classDef bootstrap fill:#fff7ed,stroke:#f97316,color:#7c2d12
   classDef setup fill:#eef2ff,stroke:#4f46e5,color:#312e81
   classDef resolve fill:#eff6ff,stroke:#2563eb,color:#1e3a8a
 
-  class Install,Installer bootstrap
-  class Source,Python,Frontend setup
-  class MenuInstall,Menu,Choice,Off,Startup,Background resolve
+  class Download bootstrap
+  class Prepare setup
+  class Menu,Choice,Manual,Automatic,Ready,Use resolve
 ```
 
 | Area | Files | Responsibility |
