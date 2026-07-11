@@ -471,7 +471,7 @@ function App() {
                       </ChartContainer>
                     )}
                     {pageDonutData.length > 0 && (
-                      <div className="mx-auto mt-3 grid max-w-3xl gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                      <div className="mx-auto mt-3 grid max-w-3xl grid-cols-[repeat(auto-fit,minmax(13rem,1fr))] gap-2">
                         {pageDonutData.map((item) => (
                           <div
                             key={item.page}
@@ -482,7 +482,7 @@ function App() {
                                 className="size-2.5 shrink-0 rounded-sm"
                                 style={{ backgroundColor: item.fill }}
                               />
-                              <span className="truncate capitalize">
+                              <span className="capitalize">
                                 {item.page}
                               </span>
                             </span>

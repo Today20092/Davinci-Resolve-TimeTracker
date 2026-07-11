@@ -39,6 +39,19 @@ function Find-Uv {
     return $null
 }
 
+function Wait-ToClose {
+    if (-not [Environment]::UserInteractive) {
+        return
+    }
+
+    do {
+        $answer = Read-Host "Would you like to close this window? [y/N]"
+        if ($answer -notmatch '^(y|yes)$') {
+            Write-Host "The installer window will remain open. Enter y when you are ready to close it."
+        }
+    } while ($answer -notmatch '^(y|yes)$')
+}
+
 Confirm-Continue
 
 $uv = Find-Uv
@@ -61,4 +74,21 @@ if (-not (Test-Path $installPy)) {
     Invoke-WebRequest -Uri $InstallPyUrl -OutFile $installPy
 }
 Write-Host "[bootstrap] Starting Python installer..."
-& $uv run --python 3.13 --no-project python $installPy @args
+try {
+    & $uv run --python 3.13 --no-project python $installPy @args
+    if ($LASTEXITCODE -ne 0) {
+        throw "The Python installer exited with code $LASTEXITCODE."
+    }
+    Write-Host ""
+    Write-Host "Installation finished successfully."
+    Write-Host "Installer: $installPy"
+    Write-Host "Python runner: $uv"
+} catch {
+    Write-Host ""
+    Write-Host "Installation did not finish successfully."
+    Write-Host "Error: $($_.Exception.Message)"
+    throw
+} finally {
+    Write-Host ""
+    Wait-ToClose
+}

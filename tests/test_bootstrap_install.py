@@ -225,6 +225,15 @@ class BootstrapInstallTest(unittest.TestCase):
         self.assertIn("--no-project", (root / "install.ps1").read_text())
         self.assertIn("--no-project", (root / "install.sh").read_text())
 
+    def test_windows_installer_waits_for_permission_to_close(self):
+        root = Path(__file__).resolve().parents[1]
+        text = (root / "install.ps1").read_text()
+
+        self.assertIn("Installation finished successfully.", text)
+        self.assertIn("Installation did not finish successfully.", text)
+        self.assertIn("Would you like to close this window? [y/N]", text)
+        self.assertIn("Wait-ToClose", text)
+
 
 if __name__ == "__main__":
     unittest.main()
