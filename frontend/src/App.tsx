@@ -29,6 +29,7 @@ import {
   type Status,
 } from "@/lib/api"
 import { displayPage } from "@/lib/dashboard"
+import { sortRows } from "@/lib/sort"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -164,9 +165,8 @@ function App() {
   const [settings, setSettings] = useState<Settings | null>(null)
   const [projectDashboard, setProjectDashboard] =
     useState<CurrentProjectDashboard | null>(null)
-  const [exportSummary, setExportSummary] = useState<
-    Dashboard["export_preview"]
-  >(null)
+  const [exportSummary, setExportSummary] =
+    useState<Dashboard["export_preview"]>(null)
   const [selectedSession, setSelectedSession] = useState<Session | null>(null)
   const [editForm, setEditForm] = useState<SessionUpdate | null>(null)
   const [idleMinutes, setIdleMinutes] = useState("5")
@@ -181,20 +181,19 @@ function App() {
     key: keyof Session
     direction: "ascending" | "descending"
   } | null>(null)
+  const [projectSort, setProjectSort] = useState<{
+    key: keyof ProjectSummary
+    direction: "ascending" | "descending"
+  } | null>(null)
+
+  const sortedProjects = useMemo(() => {
+    if (!projectSort) return projects
+    return sortRows(projects, projectSort.key, projectSort.direction)
+  }, [projects, projectSort])
 
   const sortedSessions = useMemo(() => {
     if (!sessionSort) return sessions
-    const direction = sessionSort.direction === "ascending" ? 1 : -1
-    return [...sessions].sort(
-      (a, b) =>
-        String(a[sessionSort.key]).localeCompare(
-          String(b[sessionSort.key]),
-          undefined,
-          {
-            numeric: true,
-          }
-        ) * direction
-    )
+    return sortRows(sessions, sessionSort.key, sessionSort.direction)
   }, [sessions, sessionSort])
 
   function sortSessions(key: keyof Session) {
@@ -252,6 +251,16 @@ function App() {
   async function changeLaunchAtStartup(enabled: boolean) {
     if (!window.desktop) return
     setLaunchAtStartup(await window.desktop.setLaunchAtStartup(enabled))
+  }
+
+  function sortProjects(key: keyof ProjectSummary) {
+    setProjectSort((current) => ({
+      key,
+      direction:
+        current?.key === key && current.direction === "ascending"
+          ? "descending"
+          : "ascending",
+    }))
   }
 
   function changeCloseBehavior(value: string) {
@@ -560,7 +569,9 @@ function App() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <ActivityTable sessions={projectDashboard.recent_sessions} />
+                    <ActivityTable
+                      sessions={projectDashboard.recent_sessions}
+                    />
                   </CardContent>
                 </Card>
               </>
@@ -579,14 +590,29 @@ function App() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Project</TableHead>
-                      <TableHead>Sessions</TableHead>
-                      <TableHead>Total</TableHead>
-                      <TableHead>Last Session</TableHead>
+                      {[
+                        ["Project", "project_name"],
+                        ["Sessions", "session_count"],
+                        ["Total", "duration_seconds"],
+                        ["Last Session", "last_session_date"],
+                      ].map(([label, key]) => (
+                        <SortHead
+                          key={key}
+                          label={label}
+                          direction={
+                            projectSort?.key === key
+                              ? projectSort.direction
+                              : undefined
+                          }
+                          onClick={() =>
+                            sortProjects(key as keyof ProjectSummary)
+                          }
+                        />
+                      ))}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {projects.map((project) => (
+                    {sortedProjects.map((project) => (
                       <TableRow key={project.project_name}>
                         <TableCell className="font-medium">
                           {project.project_name}
@@ -776,15 +802,21 @@ function App() {
                     <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                       <Metric
                         title="Total tracked"
-                        value={duration(projectDashboard.totals.tracked_seconds)}
+                        value={duration(
+                          projectDashboard.totals.tracked_seconds
+                        )}
                       />
                       <Metric
                         title="Editing"
-                        value={duration(projectDashboard.activity_totals.editing)}
+                        value={duration(
+                          projectDashboard.activity_totals.editing
+                        )}
                       />
                       <Metric
                         title="Rendering"
-                        value={duration(projectDashboard.activity_totals.rendering)}
+                        value={duration(
+                          projectDashboard.activity_totals.rendering
+                        )}
                       />
                       <Metric
                         title="Tracked sessions"
@@ -1240,18 +1272,46 @@ function Metric({ title, value }: { title: string; value: string }) {
 }
 
 function ActivityTable({ sessions }: { sessions: Session[] }) {
+  const [sort, setSort] = useState<{
+    key: keyof Session
+    direction: "ascending" | "descending"
+  } | null>(null)
+  const sortedSessions = useMemo(() => {
+    if (!sort) return sessions
+    return sortRows(sessions, sort.key, sort.direction)
+  }, [sessions, sort])
+
+  function sortBy(key: keyof Session) {
+    setSort((current) => ({
+      key,
+      direction:
+        current?.key === key && current.direction === "ascending"
+          ? "descending"
+          : "ascending",
+    }))
+  }
+
   return (
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Start</TableHead>
-          <TableHead>Duration</TableHead>
-          <TableHead>Page</TableHead>
-          <TableHead>Activity</TableHead>
+          {[
+            ["Start", "started_at_utc"],
+            ["Duration", "duration_seconds"],
+            ["Page", "page"],
+            ["Activity", "activity_category"],
+          ].map(([label, key]) => (
+            <SortHead
+              key={key}
+              label={label}
+              direction={sort?.key === key ? sort.direction : undefined}
+              onClick={() => sortBy(key as keyof Session)}
+            />
+          ))}
         </TableRow>
       </TableHeader>
       <TableBody>
-        {sessions.map((session) => (
+        {sortedSessions.map((session) => (
           <TableRow key={session.id}>
             <TableCell>{friendlyDateTime(session.started_at_utc)}</TableCell>
             <TableCell>{session.duration}</TableCell>
