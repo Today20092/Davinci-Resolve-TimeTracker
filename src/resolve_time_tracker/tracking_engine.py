@@ -26,10 +26,14 @@ class TrackingEngine:
         store.recover_active_session()
         self._store = store
         self._snapshot_provider = snapshot_provider
-        self._session = _SessionState(store)
         self._previous: RuntimeSnapshot | None = None
         self._previous_idle: bool | None = None
         self._tracking_enabled = True
+        self._project_id: int | None = None
+        self._page = "Unknown"
+        self._is_idle = False
+        self._has_focus = True
+        self._is_rendering = False
 
     @property
     def previous_snapshot(self) -> RuntimeSnapshot | None:
@@ -41,7 +45,7 @@ class TrackingEngine:
 
     def poll(self, observed_at: datetime) -> RuntimeSnapshot:
         if not self._tracking_enabled:
-            self._session.resolve_closed(observed_at)
+            self._close(observed_at)
             self._previous_idle = None
             return self._previous or RuntimeSnapshot(None, None, False, None, False)
 
@@ -53,43 +57,57 @@ class TrackingEngine:
         )
 
         if previous is None or idle_now != self._previous_idle:
-            if idle_now:
-                self._session.idle_started(observed_at)
-            else:
-                self._session.idle_ended(observed_at)
+            if idle_now and not self._is_idle:
+                if not self._is_rendering:
+                    self._close(observed_at)
+                self._is_idle = True
+            elif not idle_now and self._is_idle:
+                self._is_idle = False
+                self._open_if_billable(observed_at)
 
         if (
             previous is None
             or snapshot.resolve_is_foreground != previous.resolve_is_foreground
         ):
-            if snapshot.resolve_is_foreground:
-                self._session.resolve_focus_gained(observed_at)
-            else:
-                self._session.resolve_focus_lost(observed_at)
+            if snapshot.resolve_is_foreground and not self._has_focus:
+                self._has_focus = True
+                self._open_if_billable(observed_at)
+            elif not snapshot.resolve_is_foreground and self._has_focus:
+                if not self._is_rendering:
+                    self._close(observed_at)
+                self._has_focus = False
 
         if previous is None or snapshot.page != previous.page:
-            self._session.page_changed(observed_at, snapshot.page or "Unknown")
+            was_billable = self._is_billable()
+            if was_billable:
+                self._close(observed_at)
+            self._page = snapshot.page or "Unknown"
+            if was_billable:
+                self._open(observed_at)
 
         if previous is None or snapshot.project_name != previous.project_name:
+            self._close(observed_at)
             if snapshot.project_name:
-                self._session.project_changed(observed_at, snapshot.project_name)
+                self._project_id = self._store.upsert_project(snapshot.project_name)
+                self._open_if_billable(observed_at)
             else:
-                self._session.project_closed(observed_at)
+                self._project_id = None
 
         if previous is None or snapshot.is_rendering != previous.is_rendering:
-            if snapshot.is_rendering:
-                self._session.rendering_started(observed_at)
-            else:
-                self._session.rendering_finished(observed_at)
+            if snapshot.is_rendering != self._is_rendering:
+                self._close(observed_at)
+                self._is_rendering = snapshot.is_rendering
+                self._open_if_billable(observed_at)
 
-        self._session.heartbeat_tick(observed_at)
+        if self._store.active_session() is not None:
+            self._store.update_heartbeat(observed_at)
         self._previous = snapshot
         self._previous_idle = idle_now
         return snapshot
 
     def pause(self, observed_at: datetime) -> None:
         self._tracking_enabled = False
-        self._session.resolve_closed(observed_at)
+        self._close(observed_at)
 
     def resume(self) -> None:
         self._tracking_enabled = True
@@ -97,80 +115,6 @@ class TrackingEngine:
         self._previous_idle = None
 
     def close(self, observed_at: datetime) -> None:
-        self._session.resolve_closed(observed_at)
-
-
-class _SessionState:
-    def __init__(self, store: SQLiteStore):
-        self._store = store
-        self._project_id: int | None = None
-        self._page = "Unknown"
-        self._is_idle = False
-        self._has_focus = True
-        self._is_rendering = False
-
-    def project_changed(self, observed_at: datetime, project_name: str) -> None:
-        self._close(observed_at)
-        self._project_id = self._store.upsert_project(project_name)
-        self._open_if_billable(observed_at)
-
-    def project_closed(self, observed_at: datetime) -> None:
-        self._close(observed_at)
-        self._project_id = None
-
-    def page_changed(self, observed_at: datetime, page: str) -> None:
-        was_billable = self._is_billable()
-        if was_billable:
-            self._close(observed_at)
-        self._page = page or "Unknown"
-        if was_billable:
-            self._open(observed_at)
-
-    def rendering_started(self, observed_at: datetime) -> None:
-        if self._is_rendering:
-            return
-        self._close(observed_at)
-        self._is_rendering = True
-        self._open_if_billable(observed_at)
-
-    def rendering_finished(self, observed_at: datetime) -> None:
-        if not self._is_rendering:
-            return
-        self._close(observed_at)
-        self._is_rendering = False
-        self._open_if_billable(observed_at)
-
-    def idle_started(self, observed_at: datetime) -> None:
-        if self._is_idle:
-            return
-        if not self._is_rendering:
-            self._close(observed_at)
-        self._is_idle = True
-
-    def idle_ended(self, observed_at: datetime) -> None:
-        if not self._is_idle:
-            return
-        self._is_idle = False
-        self._open_if_billable(observed_at)
-
-    def resolve_focus_lost(self, observed_at: datetime) -> None:
-        if not self._has_focus:
-            return
-        if not self._is_rendering:
-            self._close(observed_at)
-        self._has_focus = False
-
-    def resolve_focus_gained(self, observed_at: datetime) -> None:
-        if self._has_focus:
-            return
-        self._has_focus = True
-        self._open_if_billable(observed_at)
-
-    def heartbeat_tick(self, observed_at: datetime) -> None:
-        if self._store.active_session() is not None:
-            self._store.update_heartbeat(observed_at)
-
-    def resolve_closed(self, observed_at: datetime) -> None:
         self._close(observed_at)
 
     def _is_billable(self) -> bool:
