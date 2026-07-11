@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from io import StringIO
 from pathlib import Path
 from typing import Any, Callable, Iterator
@@ -90,20 +90,33 @@ class ApiState:
 
     def projects(self) -> list[dict[str, Any]]:
         with self.lock:
-            return [
-                {
-                    "project_name": row["project_name"],
-                    "session_count": row["session_count"],
-                    "duration_seconds": row["duration_seconds"],
-                    "duration": _duration(row["duration_seconds"]),
-                    "last_session_date": row["last_session_date"],
-                }
-                for row in self.store.project_summaries()
-            ]
+            return self._projects_unlocked()
 
     def sessions(self) -> list[dict[str, Any]]:
         with self.lock:
-            return [self._session(row) for row in self.store.sessions()]
+            return self._sessions_unlocked()
+
+    def dashboard(self) -> dict[str, Any]:
+        with self.lock:
+            if self.tracking_engine is not None:
+                try:
+                    self._poll_unlocked()
+                    self.last_runtime_error = None
+                except Exception as exc:
+                    self.last_runtime_error = f"{type(exc).__name__}: {exc}"
+            status = self._status_unlocked()
+            sessions = self._sessions_unlocked()
+            current_project, export_preview = self._current_project_unlocked(
+                status, sessions
+            )
+            return {
+                "status": status,
+                "settings": self._settings_unlocked(),
+                "projects": self._projects_unlocked(),
+                "sessions": sessions,
+                "current_project": current_project,
+                "export_preview": export_preview,
+            }
 
     def settings(self) -> dict[str, Any]:
         with self.lock:
@@ -160,7 +173,8 @@ class ApiState:
 
     def events(self, *, once: bool, poll_interval_seconds: float) -> Iterator[str]:
         while True:
-            yield _sse("status", self.refresh())
+            self.refresh()
+            yield _sse("dashboard", {})
             if once:
                 return
             time.sleep(poll_interval_seconds)
@@ -233,6 +247,99 @@ class ApiState:
             "idle_timeout_minutes": max(1, round(seconds / 60)),
         }
 
+    def _projects_unlocked(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "project_name": row["project_name"],
+                "session_count": row["session_count"],
+                "duration_seconds": row["duration_seconds"],
+                "duration": _duration(row["duration_seconds"]),
+                "last_session_date": row["last_session_date"],
+            }
+            for row in self.store.project_summaries()
+        ]
+
+    def _sessions_unlocked(self) -> list[dict[str, Any]]:
+        return [self._session(row) for row in self.store.sessions()]
+
+    def _current_project_unlocked(
+        self, status: dict[str, Any], sessions: list[dict[str, Any]]
+    ) -> tuple[dict[str, Any] | None, dict[str, str] | None]:
+        project = status["project"]
+        if project == "none":
+            return None, None
+
+        project_sessions = [
+            session for session in sessions if session["project_name"] == project
+        ]
+        activity_totals = {"editing": 0, "playback": 0, "rendering": 0}
+        page_totals: dict[str, int] = {}
+        today = self.now().astimezone().date()
+        today_seconds = 0
+        for session in project_sessions:
+            seconds = session["duration_seconds"]
+            activity_totals[session["activity_category"]] += seconds
+            page = _display_page(session["page"], session["activity_category"])
+            page_totals[page] = page_totals.get(page, 0) + seconds
+            today_seconds += _seconds_on_local_date(
+                _parse_utc(session["started_at_utc"]),
+                _parse_utc(session["ended_at_utc"]),
+                today,
+            )
+
+        active = self.store.active_session_summary()
+        active_seconds = status["active_elapsed_seconds"]
+        if active is not None:
+            category = active["activity_category"]
+            activity_totals[category] += active_seconds
+            page = _display_page(active["page"], category)
+            page_totals[page] = page_totals.get(page, 0) + active_seconds
+            today_seconds += _seconds_on_local_date(
+                _parse_utc(active["started_at_utc"]), self.now(), today
+            )
+
+        recent = sorted(
+            project_sessions, key=lambda session: session["started_at_utc"], reverse=True
+        )[:5]
+        last_activity = (
+            status["heartbeat"]
+            if status["tracking_status"] == "active"
+            else recent[0]["ended_at_utc"] if recent else "none"
+        )
+        tracked_seconds = sum(activity_totals.values())
+        current_project = {
+            "project": project,
+            "totals": {
+                "tracked_seconds": tracked_seconds,
+                "today_seconds": today_seconds,
+                "session_count": len(project_sessions) + (1 if active is not None else 0),
+            },
+            "activity_totals": activity_totals,
+            "page_totals": [
+                {"page": page, "seconds": seconds}
+                for page, seconds in sorted(
+                    page_totals.items(), key=lambda item: item[1], reverse=True
+                )
+            ],
+            "recent_sessions": recent,
+            "last_activity": last_activity,
+        }
+        dates = sorted(
+            _parse_utc(value).astimezone().date()
+            for session in project_sessions
+            for value in (session["started_at_utc"], session["ended_at_utc"])
+        )
+        export_preview = {
+            "project": project,
+            "generated_at": today.strftime("%m/%d/%Y"),
+            "date_range": (
+                f"{dates[0]:%m/%d/%Y} - {dates[-1]:%m/%d/%Y}"
+                if dates
+                else "Live project time"
+            ),
+        }
+        return current_project, export_preview
+
     def _session_by_id_unlocked(self, session_id: int) -> dict[str, Any]:
         for row in self.store.sessions():
             if row["id"] == session_id:
@@ -274,21 +381,13 @@ def create_app(
     def status() -> dict[str, Any]:
         return api.refresh()
 
+    @app.get("/dashboard")
+    def dashboard() -> dict[str, Any]:
+        return api.dashboard()
+
     @app.post("/refresh")
     def refresh() -> dict[str, Any]:
         return api.refresh()
-
-    @app.get("/projects")
-    def projects() -> list[dict[str, Any]]:
-        return api.projects()
-
-    @app.get("/sessions")
-    def sessions() -> list[dict[str, Any]]:
-        return api.sessions()
-
-    @app.get("/settings")
-    def settings() -> dict[str, Any]:
-        return api.settings()
 
     @app.post("/tracking/pause")
     def pause_tracking() -> dict[str, Any]:
@@ -381,3 +480,18 @@ def _safe_filename(value: str) -> str:
         char if char.isalnum() or char in {"-", "_", "."} else "-" for char in value
     ).strip("-")
     return filename or "resolve-project"
+
+
+def _display_page(page: str, category: str) -> str:
+    if category == "rendering" and page in {"", "Unknown", "none"}:
+        return "Render/Export"
+    return page or "Unknown"
+
+
+def _seconds_on_local_date(started: datetime, ended: datetime, day: date) -> int:
+    local_now = datetime.now().astimezone()
+    start_of_day = datetime.combine(day, datetime.min.time(), tzinfo=local_now.tzinfo)
+    end_of_day = start_of_day + timedelta(days=1)
+    overlap_start = max(started.astimezone(), start_of_day)
+    overlap_end = min(ended.astimezone(), end_of_day)
+    return max(0, int((overlap_end - overlap_start).total_seconds()))

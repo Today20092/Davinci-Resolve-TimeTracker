@@ -51,6 +51,36 @@ export type PdfExportOptions = {
   show_recent_activity: boolean
 }
 
+export type CurrentProjectDashboard = {
+  project: string
+  totals: {
+    tracked_seconds: number
+    today_seconds: number
+    session_count: number
+  }
+  activity_totals: {
+    editing: number
+    playback: number
+    rendering: number
+  }
+  page_totals: Array<{ page: string; seconds: number }>
+  recent_sessions: Session[]
+  last_activity: string
+}
+
+export type Dashboard = {
+  status: Status
+  settings: Settings
+  projects: ProjectSummary[]
+  sessions: Session[]
+  current_project: CurrentProjectDashboard | null
+  export_preview: {
+    project: string
+    generated_at: string
+    date_range: string
+  } | null
+}
+
 export function formatSidecarError(error: unknown) {
   return error instanceof Error ? error.message : String(error)
 }
@@ -89,21 +119,8 @@ export function createSidecarClient({
     return response.json() as Promise<T>
   }
 
-  async function loadHistory() {
-    const [projects, sessions] = await Promise.all([
-      request<ProjectSummary[]>("/projects"),
-      request<Session[]>("/sessions"),
-    ])
-    return { projects, sessions }
-  }
-
   async function loadDashboard() {
-    const [status, settings, history] = await Promise.all([
-      request<Status>("/status"),
-      request<Settings>("/settings"),
-      loadHistory(),
-    ])
-    return { status, settings, ...history }
+    return request<Dashboard>("/dashboard")
   }
 
   async function runAndReload(action: () => Promise<unknown>) {
@@ -126,7 +143,6 @@ export function createSidecarClient({
 
   return {
     loadDashboard,
-    loadHistory,
     csvExportUrl: () => `${baseUrl}/export.csv`,
     exportPdf,
     refresh: () =>
@@ -155,21 +171,13 @@ export function createSidecarClient({
       onUpdate,
       onError,
     }: {
-      onUpdate: (update: {
-        status: Status
-        projects: ProjectSummary[]
-        sessions: Session[]
-      }) => void
+      onUpdate: (update: Dashboard) => void
       onError: (error: unknown) => void
     }) {
       const Source = eventSource ?? EventSource
       const source = new Source(`${baseUrl}/events`)
-      source.addEventListener("status", (event) => {
-        const status = JSON.parse((event as MessageEvent).data) as Status
-        void loadHistory().then(
-          (history) => onUpdate({ status, ...history }),
-          onError
-        )
+      source.addEventListener("dashboard", () => {
+        void loadDashboard().then(onUpdate, onError)
       })
       source.onerror = () => onError(new Error("Waiting for the sidecar API"))
       return () => source.close()

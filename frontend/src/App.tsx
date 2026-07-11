@@ -17,6 +17,8 @@ import {
 import {
   createSidecarClient,
   formatSidecarError,
+  type CurrentProjectDashboard,
+  type Dashboard,
   type PdfExportOptions,
   type ProjectSummary,
   type Session,
@@ -24,11 +26,7 @@ import {
   type Settings,
   type Status,
 } from "@/lib/api"
-import {
-  currentProjectDashboard,
-  displayPage,
-  projectExportSummary,
-} from "@/lib/dashboard"
+import { displayPage } from "@/lib/dashboard"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -96,7 +94,6 @@ const emptyStatus: Status = {
 }
 
 const sidecar = createSidecarClient()
-type Dashboard = Awaited<ReturnType<typeof sidecar.loadDashboard>>
 
 const pageChartConfig = {
   seconds: { label: "Tracked time", color: "var(--chart-1)" },
@@ -117,6 +114,7 @@ const pageChartColors = [
 
 const activityChartConfig = {
   editing: { label: "Editing", color: "var(--chart-2)" },
+  playback: { label: "Playback", color: "var(--chart-3)" },
   rendering: { label: "Rendering", color: "var(--chart-4)" },
 } satisfies ChartConfig
 
@@ -157,6 +155,11 @@ function App() {
   const [projects, setProjects] = useState<ProjectSummary[]>([])
   const [sessions, setSessions] = useState<Session[]>([])
   const [settings, setSettings] = useState<Settings | null>(null)
+  const [projectDashboard, setProjectDashboard] =
+    useState<CurrentProjectDashboard | null>(null)
+  const [exportSummary, setExportSummary] = useState<
+    Dashboard["export_preview"]
+  >(null)
   const [selectedSession, setSelectedSession] = useState<Session | null>(null)
   const [editForm, setEditForm] = useState<SessionUpdate | null>(null)
   const [idleMinutes, setIdleMinutes] = useState("5")
@@ -198,6 +201,8 @@ function App() {
     setSettings(dashboard.settings)
     setProjects(dashboard.projects)
     setSessions(dashboard.sessions)
+    setProjectDashboard(dashboard.current_project)
+    setExportSummary(dashboard.export_preview)
     setIdleMinutes(String(dashboard.settings.idle_timeout_minutes))
     setError(null)
   }
@@ -207,12 +212,7 @@ function App() {
       setError(formatSidecarError(error))
     })
     return sidecar.watchDashboard({
-      onUpdate: (update) => {
-        setStatus(update.status)
-        setProjects(update.projects)
-        setSessions(update.sessions)
-        setError(null)
-      },
+      onUpdate: applyDashboard,
       onError: (error) => setError(formatSidecarError(error)),
     })
   }, [])
@@ -237,12 +237,7 @@ function App() {
     }
   }, [projects])
 
-  const projectDashboard = useMemo(
-    () => currentProjectDashboard(sessions, status),
-    [sessions, status]
-  )
-
-  const pageChartData = projectDashboard.pageData
+  const pageChartData = projectDashboard?.page_totals ?? []
   const pageDonutData = pageChartData.map((item, index) => ({
     ...item,
     fill: pageChartColors[index % pageChartColors.length],
@@ -251,17 +246,22 @@ function App() {
     {
       activity: "editing",
       label: "Editing",
-      seconds: projectDashboard.editingSeconds,
+      seconds: projectDashboard?.activity_totals.editing ?? 0,
       fill: "var(--color-editing)",
+    },
+    {
+      activity: "playback",
+      label: "Playback",
+      seconds: projectDashboard?.activity_totals.playback ?? 0,
+      fill: "var(--color-playback)",
     },
     {
       activity: "rendering",
       label: "Rendering",
-      seconds: projectDashboard.renderingSeconds,
+      seconds: projectDashboard?.activity_totals.rendering ?? 0,
       fill: "var(--color-rendering)",
     },
   ].filter((item) => item.seconds > 0)
-  const exportSummary = projectExportSummary(projectDashboard, sessions)
 
   const projectName =
     status.project === "none" ? "No Resolve project detected" : status.project
@@ -303,7 +303,7 @@ function App() {
   }
 
   async function exportPdf() {
-    if (!projectDashboard.project) return
+    if (!projectDashboard) return
     try {
       const filename = `${projectDashboard.project.replaceAll(" ", "-")}-time-report.pdf`
       if (window.desktop) {
@@ -391,7 +391,7 @@ function App() {
           </TabsList>
 
           <TabsContent value="dashboard" className="flex flex-col gap-4">
-            {!projectDashboard.project ? (
+            {!projectDashboard ? (
               <Empty className="min-h-96 rounded-lg border">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
@@ -409,19 +409,19 @@ function App() {
                 <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
                   <Metric
                     title="Tracked today"
-                    value={duration(projectDashboard.todaySeconds)}
+                    value={duration(projectDashboard.totals.today_seconds)}
                   />
                   <Metric
                     title="Project total"
-                    value={duration(projectDashboard.trackedSeconds)}
+                    value={duration(projectDashboard.totals.tracked_seconds)}
                   />
                   <Metric
                     title="Render time"
-                    value={duration(projectDashboard.renderingSeconds)}
+                    value={duration(projectDashboard.activity_totals.rendering)}
                   />
                   <Metric
                     title="Last activity"
-                    value={friendlyDateTime(projectDashboard.lastActivity)}
+                    value={friendlyDateTime(projectDashboard.last_activity)}
                   />
                 </div>
                 <Card>
@@ -429,7 +429,7 @@ function App() {
                     <CardTitle>Time by page</CardTitle>
                     <CardDescription>
                       {projectDashboard.project} -{" "}
-                      {projectDashboard.sessionCount} tracked sessions
+                      {projectDashboard.totals.session_count} tracked sessions
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -522,7 +522,7 @@ function App() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <ActivityTable sessions={projectDashboard.recentSessions} />
+                    <ActivityTable sessions={projectDashboard.recent_sessions} />
                   </CardContent>
                 </Card>
               </>
@@ -646,7 +646,7 @@ function App() {
           </TabsContent>
 
           <TabsContent value="export">
-            {!exportSummary ? (
+            {!exportSummary || !projectDashboard ? (
               <Empty className="min-h-96 rounded-lg border">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
@@ -729,8 +729,8 @@ function App() {
                       </h2>
                     </div>
                     <div className="text-sm text-muted-foreground sm:text-right">
-                      <p>Generated {exportSummary.generatedAt}</p>
-                      <p>{exportSummary.dateRange}</p>
+                      <p>Generated {exportSummary.generated_at}</p>
+                      <p>{exportSummary.date_range}</p>
                     </div>
                   </div>
 
@@ -738,19 +738,19 @@ function App() {
                     <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                       <Metric
                         title="Total tracked"
-                        value={duration(projectDashboard.trackedSeconds)}
+                        value={duration(projectDashboard.totals.tracked_seconds)}
                       />
                       <Metric
                         title="Editing"
-                        value={duration(projectDashboard.editingSeconds)}
+                        value={duration(projectDashboard.activity_totals.editing)}
                       />
                       <Metric
                         title="Rendering"
-                        value={duration(projectDashboard.renderingSeconds)}
+                        value={duration(projectDashboard.activity_totals.rendering)}
                       />
                       <Metric
                         title="Tracked sessions"
-                        value={String(projectDashboard.sessionCount)}
+                        value={String(projectDashboard.totals.session_count)}
                       />
                     </div>
                   )}
@@ -895,7 +895,7 @@ function App() {
                         </CardHeader>
                         <CardContent>
                           <ActivityTable
-                            sessions={projectDashboard.recentSessions}
+                            sessions={projectDashboard.recent_sessions}
                           />
                         </CardContent>
                       </Card>
