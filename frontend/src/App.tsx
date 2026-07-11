@@ -4,6 +4,7 @@ import {
   IconDeviceFloppy,
   IconDownload,
   IconFolderOpen,
+  IconInfoCircle,
   IconPencil,
   IconPlayerPause,
   IconPlayerPlay,
@@ -61,6 +62,11 @@ import {
 } from "@/components/ui/empty"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import {
   Select,
   SelectContent,
@@ -929,7 +935,25 @@ function App() {
               </CardHeader>
               <CardContent>
                 <div className="flex max-w-md flex-col gap-2">
-                  <Label htmlFor="idle-timeout">Idle timeout minutes</Label>
+                  <div className="flex items-center gap-1">
+                    <Label htmlFor="idle-timeout">Idle timeout minutes</Label>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          aria-label="About idle timeout"
+                        >
+                          <IconInfoCircle />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Rendering and exporting continue to count as active work,
+                        even after this idle timeout.
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                   <div className="flex gap-2">
                     <Input
                       id="idle-timeout"
