@@ -9,6 +9,9 @@ import {
   IconPlayerPlay,
   IconPrinter,
   IconRefresh,
+  IconSelector,
+  IconSortAscending,
+  IconSortDescending,
 } from "@tabler/icons-react"
 
 import {
@@ -123,6 +126,29 @@ const defaultPdfOptions = {
   show_recent_activity: true,
 }
 
+function SortHead({
+  label,
+  direction,
+  onClick,
+}: {
+  label: string
+  direction?: "ascending" | "descending"
+  onClick: () => void
+}) {
+  const Icon = direction === "ascending"
+    ? IconSortAscending
+    : direction === "descending"
+      ? IconSortDescending
+      : IconSelector
+  return (
+    <TableHead aria-sort={direction ?? "none"}>
+      <Button variant="ghost" className="-ml-3" onClick={onClick}>
+        {label}<Icon />
+      </Button>
+    </TableHead>
+  )
+}
+
 function App() {
   const [status, setStatus] = useState<Status>(emptyStatus)
   const [projects, setProjects] = useState<ProjectSummary[]>([])
@@ -134,6 +160,30 @@ function App() {
   const [pdfOptions, setPdfOptions] = useState(defaultPdfOptions)
   const [theme, setTheme] = useState(() => localStorage.theme || "light")
   const [error, setError] = useState<string | null>(null)
+  const [sessionSort, setSessionSort] = useState<{
+    key: keyof Session
+    direction: "ascending" | "descending"
+  } | null>(null)
+
+  const sortedSessions = useMemo(() => {
+    if (!sessionSort) return sessions
+    const direction = sessionSort.direction === "ascending" ? 1 : -1
+    return [...sessions].sort((a, b) =>
+      String(a[sessionSort.key]).localeCompare(String(b[sessionSort.key]), undefined, {
+        numeric: true,
+      }) * direction
+    )
+  }, [sessions, sessionSort])
+
+  function sortSessions(key: keyof Session) {
+    setSessionSort((current) => ({
+      key,
+      direction:
+        current?.key === key && current.direction === "ascending"
+          ? "descending"
+          : "ascending",
+    }))
+  }
 
   function applyDashboard(dashboard: Dashboard) {
     setStatus(dashboard.status)
@@ -390,7 +440,7 @@ function App() {
                             axisLine={false}
                             tickLine={false}
                             type="category"
-                            width={72}
+                            width={96}
                           />
                           <ChartTooltip
                             content={
@@ -523,19 +573,21 @@ function App() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Project</TableHead>
-                      <TableHead>Start</TableHead>
-                      <TableHead>End</TableHead>
-                      <TableHead>Duration</TableHead>
-                      <TableHead>Page</TableHead>
-                      <TableHead>Activity</TableHead>
+                      {[["Project", "project_name"], ["Start", "started_at_utc"], ["End", "ended_at_utc"], ["Duration", "duration_seconds"], ["Page", "page"], ["Activity", "activity_category"]].map(([label, key]) => (
+                        <SortHead
+                          key={key}
+                          label={label}
+                          direction={sessionSort?.key === key ? sessionSort.direction : undefined}
+                          onClick={() => sortSessions(key as keyof Session)}
+                        />
+                      ))}
                       <TableHead className="w-12">
                         <span className="sr-only">Edit</span>
                       </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {sessions.map((session) => (
+                    {sortedSessions.map((session) => (
                       <TableRow key={session.id}>
                         <TableCell className="font-medium">
                           {session.project_name}
