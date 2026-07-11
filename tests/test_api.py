@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from resolve_time_tracker.api import create_app, run_api
+from resolve_time_tracker.api import _seconds_on_local_date, create_app, run_api
 from resolve_time_tracker.database import SQLiteStore
 from resolve_time_tracker.tracking_engine import RuntimeSnapshot, TrackingEngine
 
@@ -26,6 +26,82 @@ class SequenceSnapshotProvider:
 
 
 class ApiTest(unittest.TestCase):
+    def test_local_day_uses_dst_aware_midnight_boundaries(self):
+        spring_forward = datetime(2026, 3, 8).date()
+        with patch(
+            "resolve_time_tracker.api.time.mktime",
+            side_effect=[
+                datetime(2026, 3, 8, 5, tzinfo=timezone.utc).timestamp(),
+                datetime(2026, 3, 9, 4, tzinfo=timezone.utc).timestamp(),
+            ],
+        ):
+            seconds = _seconds_on_local_date(
+                datetime(2026, 3, 8, tzinfo=timezone.utc),
+                datetime(2026, 3, 10, tzinfo=timezone.utc),
+                spring_forward,
+            )
+
+        self.assertEqual(23 * 60 * 60, seconds)
+
+    def test_dashboard_returns_current_project_read_model(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with SQLiteStore(
+                Path(tmp) / "tracker.sqlite3", check_same_thread=False
+            ) as store:
+                engine = TrackingEngine(
+                    store,
+                    snapshot_provider=SequenceSnapshotProvider(
+                        [RuntimeSnapshot("Project A", "edit", False, 0, True)]
+                    ),
+                )
+                engine.poll(utc(9))
+                engine.close(utc(10))
+                session = store.sessions()[0]
+                store.update_session(
+                    session["id"],
+                    started_at=utc(9),
+                    ended_at=utc(10),
+                    page="Edit",
+                    activity_category="playback",
+                )
+                tracker = TrackingEngine(
+                    store,
+                    snapshot_provider=SequenceSnapshotProvider(
+                        [
+                            RuntimeSnapshot("Project A", "Color", False, 0, True),
+                            RuntimeSnapshot("Project A", "Color", False, 0, True),
+                            RuntimeSnapshot("Project A", "Color", False, 0, True),
+                        ]
+                    ),
+                )
+                tracker.poll(utc(11))
+                now = [utc(11)]
+                client = TestClient(
+                    create_app(store, tracking_engine=tracker, now=lambda: now[0])
+                )
+
+                just_opened = client.get("/dashboard").json()
+                now[0] = utc(12)
+                dashboard = client.get("/dashboard").json()
+
+        self.assertEqual(2, just_opened["current_project"]["totals"]["session_count"])
+        self.assertEqual("Project A", dashboard["status"]["project"])
+        self.assertEqual(1, len(dashboard["projects"]))
+        self.assertEqual(1, len(dashboard["sessions"]))
+        self.assertEqual(300, dashboard["settings"]["idle_timeout_seconds"])
+        current = dashboard["current_project"]
+        self.assertEqual(7200, current["totals"]["tracked_seconds"])
+        self.assertEqual(2, current["totals"]["session_count"])
+        self.assertEqual(
+            {"editing": 3600, "playback": 3600, "rendering": 0},
+            current["activity_totals"],
+        )
+        self.assertEqual("2026-01-02T12:00:00Z", current["last_activity"])
+        self.assertEqual("Project A", dashboard["export_preview"]["project"])
+        self.assertEqual(
+            "01/02/2026 - 01/02/2026", dashboard["export_preview"]["date_range"]
+        )
+
     def test_status_poll_refreshes_tracking_without_the_companion_window(self):
         with tempfile.TemporaryDirectory() as tmp:
             with SQLiteStore(
@@ -110,10 +186,11 @@ class ApiTest(unittest.TestCase):
                 app = create_app(store, now=lambda: utc(11))
                 client = TestClient(app)
 
-                status = client.get("/status").json()
-                projects = client.get("/projects").json()
-                sessions = client.get("/sessions").json()
-                settings = client.get("/settings").json()
+                dashboard = client.get("/dashboard").json()
+                status = dashboard["status"]
+                projects = dashboard["projects"]
+                sessions = dashboard["sessions"]
+                settings = dashboard["settings"]
                 csv_text = client.get("/export.csv").text
                 pdf = client.post(
                     "/export.pdf",
@@ -170,7 +247,7 @@ class ApiTest(unittest.TestCase):
                 settings = client.post(
                     "/settings", json={"idle_timeout_seconds": 900}
                 ).json()
-                session = client.get("/sessions").json()[0]
+                session = client.get("/dashboard").json()["sessions"][0]
                 edited = client.post(
                     f"/sessions/{session['id']}",
                     json={
@@ -202,8 +279,8 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(
             "text/event-stream; charset=utf-8", response.headers["content-type"]
         )
-        self.assertIn("event: status", body)
-        self.assertIn('"state":"paused"', body)
+        self.assertIn("event: dashboard", body)
+        self.assertIn("data: {}", body)
 
     def test_allows_frontend_origin(self):
         with tempfile.TemporaryDirectory() as tmp:

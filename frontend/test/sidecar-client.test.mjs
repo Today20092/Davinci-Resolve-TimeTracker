@@ -5,9 +5,14 @@ import { createSidecarClient, formatSidecarError } from "../src/lib/api.ts"
 
 const responses = {
   "/status": { connection: "connected" },
-  "/settings": { idle_timeout_seconds: 300, idle_timeout_minutes: 5 },
-  "/projects": [{ project_name: "Demo" }],
-  "/sessions": [{ id: 7, project_name: "Demo" }],
+  "/dashboard": {
+    status: { connection: "connected" },
+    settings: { idle_timeout_seconds: 300, idle_timeout_minutes: 5 },
+    projects: [{ project_name: "Demo" }],
+    sessions: [{ id: 7, project_name: "Demo" }],
+    current_project: null,
+    export_preview: null,
+  },
 }
 
 test("loads dashboard data through the sidecar client interface", async () => {
@@ -23,18 +28,8 @@ test("loads dashboard data through the sidecar client interface", async () => {
 
   const dashboard = await client.loadDashboard()
 
-  assert.deepEqual(dashboard, {
-    status: responses["/status"],
-    settings: responses["/settings"],
-    projects: responses["/projects"],
-    sessions: responses["/sessions"],
-  })
-  assert.deepEqual(requested.sort(), [
-    "/projects",
-    "/sessions",
-    "/settings",
-    "/status",
-  ])
+  assert.deepEqual(dashboard, responses["/dashboard"])
+  assert.deepEqual(requested, ["/dashboard"])
 })
 
 test("performs tracking and edit commands through domain methods", async () => {
@@ -94,19 +89,8 @@ test("reloads the dashboard after a command", async () => {
 
   const dashboard = await client.refresh()
 
-  assert.deepEqual(dashboard, {
-    status: responses["/status"],
-    settings: responses["/settings"],
-    projects: responses["/projects"],
-    sessions: responses["/sessions"],
-  })
-  assert.deepEqual(requested, [
-    "/refresh",
-    "/status",
-    "/settings",
-    "/projects",
-    "/sessions",
-  ])
+  assert.deepEqual(dashboard, responses["/dashboard"])
+  assert.deepEqual(requested, ["/refresh", "/dashboard"])
 })
 
 test("watches dashboard updates without exposing event protocol", async () => {
@@ -142,24 +126,18 @@ test("watches dashboard updates without exposing event protocol", async () => {
     onUpdate: publishUpdate,
     onError: (error) => errors.push(formatSidecarError(error)),
   })
-  source.listeners.get("status")({
-    data: JSON.stringify({ connection: "connected", project: "Demo" }),
-  })
+  source.listeners.get("dashboard")({ data: "{}" })
   const update = await updatePublished
   source.onerror()
   stop()
 
   assert.equal(source.url, "http://sidecar.test/events")
-  assert.deepEqual(update, {
-    status: { connection: "connected", project: "Demo" },
-    projects: responses["/projects"],
-    sessions: responses["/sessions"],
-  })
+  assert.deepEqual(update, responses["/dashboard"])
   assert.deepEqual(errors, ["Waiting for the sidecar API"])
   assert.equal(source.closed, true)
 })
 
-test("loads Session history and exposes the CSV export location", async () => {
+test("exposes the CSV export location", async () => {
   const client = createSidecarClient({
     baseUrl: "http://sidecar.test",
     fetch: async (url) => {
@@ -168,10 +146,6 @@ test("loads Session history and exposes the CSV export location", async () => {
     },
   })
 
-  assert.deepEqual(await client.loadHistory(), {
-    projects: responses["/projects"],
-    sessions: responses["/sessions"],
-  })
   assert.equal(client.csvExportUrl(), "http://sidecar.test/export.csv")
 })
 
