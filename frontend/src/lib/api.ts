@@ -1,5 +1,7 @@
 export type Status = {
   connection: string
+  tracking_status:
+    "active" | "idle" | "paused" | "resolve_closed" | "stale" | "error"
   project: string
   page: string
   state: string

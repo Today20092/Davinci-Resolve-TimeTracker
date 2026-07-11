@@ -37,6 +37,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--api", action="store_true")
     parser.add_argument("--tracker", action="store_true")
     parser.add_argument("--companion", action="store_true")
+    parser.add_argument("--background", action="store_true")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--version", action="store_true")
@@ -48,7 +49,7 @@ def _is_windows() -> bool:
     return os.name == "nt"
 
 
-def run_electron_companion(db_path: Path) -> int:
+def run_electron_companion(db_path: Path, *, background: bool = False) -> int:
     frontend_dir = REPO_ROOT / "frontend"
     npm = shutil.which("npm.cmd" if _is_windows() else "npm")
     if npm is None:
@@ -61,6 +62,8 @@ def run_electron_companion(db_path: Path) -> int:
         if console_python.is_file():
             python = console_python
     command = [npm, "run", "desktop", "--", "--db", str(db_path)]
+    if background:
+        command.append("--background")
     if _python_has_sidecar_deps(python):
         command.extend(["--python", str(python)])
         env["RESOLVE_TIME_TRACKER_PYTHON"] = str(python)
@@ -105,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
         run_api(args.db, host=args.host, port=args.port)
         return 0
     if args.companion:
-        return run_electron_companion(args.db)
+        return run_electron_companion(args.db, background=args.background)
     run_resolve_ui(
         args.db,
         resolve=globals().get("resolve"),

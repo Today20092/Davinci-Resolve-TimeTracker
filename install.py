@@ -161,7 +161,7 @@ def install_startup(source_dir: Path, python: Path | None = None) -> Path:
                 (
                     f'start "" /min "{python}" '
                     f'"{source_dir.resolve() / "scripts" / "ResolveTimeTracker.py"}" '
-                    "--tracker"
+                    "--companion --background"
                 ),
                 "",
             ]

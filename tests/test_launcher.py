@@ -13,6 +13,20 @@ from scripts.ResolveTimeTracker import (
 
 
 class LauncherTest(unittest.TestCase):
+    def test_background_companion_forwards_background_mode_to_electron(self):
+        with (
+            patch("shutil.which", return_value="npm"),
+            patch("subprocess.run") as run,
+            patch("scripts.ResolveTimeTracker._is_windows", return_value=False),
+            patch(
+                "scripts.ResolveTimeTracker._python_has_sidecar_deps", return_value=True
+            ),
+        ):
+            run.return_value.returncode = 0
+            run_electron_companion(Path("tracker.sqlite3"), background=True)
+
+        self.assertIn("--background", run.call_args.args[0])
+
     def test_default_db_path_uses_local_app_data(self):
         with (
             patch("platform.system", return_value="Windows"),

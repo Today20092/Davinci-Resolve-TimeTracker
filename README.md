@@ -71,7 +71,7 @@ Workspace > Scripts > ResolveTimeTrackerMenu
 
 The companion window shows tracking status, current project, current page, activity category, heartbeat, sessions, settings, and CSV export. Use **Pause Tracking** when you want to stop tracking manually, and **Resume Tracking** when you want it to start again.
 
-If you opted into background startup during install, the tracker starts with your computer and records Resolve activity even when the companion window is closed.
+If you opted into background startup during install, the tracker starts in the Windows system tray and records Resolve activity even when the companion window is closed. Green means time is actively being recorded, yellow means idle or paused, gray means Resolve is closed, and red means the tracker is disconnected.
 
 CSV export writes closed sessions only. Open active sessions are exported after they close.
 

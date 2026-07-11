@@ -84,6 +84,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 
 const emptyStatus: Status = {
   connection: "waiting",
+  tracking_status: "error",
   project: "none",
   page: "none",
   state: "paused",
@@ -135,15 +136,17 @@ function SortHead({
   direction?: "ascending" | "descending"
   onClick: () => void
 }) {
-  const Icon = direction === "ascending"
-    ? IconSortAscending
-    : direction === "descending"
-      ? IconSortDescending
-      : IconSelector
+  const Icon =
+    direction === "ascending"
+      ? IconSortAscending
+      : direction === "descending"
+        ? IconSortDescending
+        : IconSelector
   return (
     <TableHead aria-sort={direction ?? "none"}>
       <Button variant="ghost" className="-ml-3" onClick={onClick}>
-        {label}<Icon />
+        {label}
+        <Icon />
       </Button>
     </TableHead>
   )
@@ -168,10 +171,15 @@ function App() {
   const sortedSessions = useMemo(() => {
     if (!sessionSort) return sessions
     const direction = sessionSort.direction === "ascending" ? 1 : -1
-    return [...sessions].sort((a, b) =>
-      String(a[sessionSort.key]).localeCompare(String(b[sessionSort.key]), undefined, {
-        numeric: true,
-      }) * direction
+    return [...sessions].sort(
+      (a, b) =>
+        String(a[sessionSort.key]).localeCompare(
+          String(b[sessionSort.key]),
+          undefined,
+          {
+            numeric: true,
+          }
+        ) * direction
     )
   }, [sessions, sessionSort])
 
@@ -257,7 +265,7 @@ function App() {
 
   const projectName =
     status.project === "none" ? "No Resolve project detected" : status.project
-  const isLive = status.state === "editing" || status.state === "rendering"
+  const isLive = status.tracking_status === "active"
 
   async function runAction(action: () => Promise<Dashboard>) {
     try {
@@ -332,7 +340,7 @@ function App() {
             <h1 className="truncate text-xl font-semibold">{projectName}</h1>
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <StatusBadge value={status.connection} />
-              <TrackingBadge live={isLive} enabled={status.tracking_enabled} />
+              <TrackingBadge status={status.tracking_status} />
               <InfoBadge
                 label="Page"
                 value={displayPage(status.page, status.state)}
@@ -495,9 +503,7 @@ function App() {
                                 className="size-2.5 shrink-0 rounded-sm"
                                 style={{ backgroundColor: item.fill }}
                               />
-                              <span className="capitalize">
-                                {item.page}
-                              </span>
+                              <span className="capitalize">{item.page}</span>
                             </span>
                             <span className="font-mono text-xs text-muted-foreground">
                               {duration(item.seconds)}
@@ -579,11 +585,22 @@ function App() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      {[["Project", "project_name"], ["Start", "started_at_utc"], ["End", "ended_at_utc"], ["Duration", "duration_seconds"], ["Page", "page"], ["Activity", "activity_category"]].map(([label, key]) => (
+                      {[
+                        ["Project", "project_name"],
+                        ["Start", "started_at_utc"],
+                        ["End", "ended_at_utc"],
+                        ["Duration", "duration_seconds"],
+                        ["Page", "page"],
+                        ["Activity", "activity_category"],
+                      ].map(([label, key]) => (
                         <SortHead
                           key={key}
                           label={label}
-                          direction={sessionSort?.key === key ? sessionSort.direction : undefined}
+                          direction={
+                            sessionSort?.key === key
+                              ? sessionSort.direction
+                              : undefined
+                          }
                           onClick={() => sortSessions(key as keyof Session)}
                         />
                       ))}
@@ -1039,23 +1056,27 @@ function StatusBadge({ value }: { value: string }) {
   )
 }
 
-function TrackingBadge({ live, enabled }: { live: boolean; enabled: boolean }) {
-  if (!enabled) {
-    return (
-      <Badge className="border-amber-200 bg-amber-100 text-amber-800">
-        Tracking paused
-      </Badge>
-    )
+function TrackingBadge({ status }: { status: Status["tracking_status"] }) {
+  const active = status === "active"
+  const labels = {
+    active: "Tracking active",
+    idle: "Idle — not recording time",
+    paused: "Tracking paused",
+    resolve_closed: "Resolve closed",
+    stale: "Tracker heartbeat stale",
+    error: "Tracker disconnected",
   }
   return (
     <Badge
       className={
-        live
+        active
           ? "border-sky-200 bg-sky-100 text-sky-800"
-          : "border-zinc-200 bg-zinc-100 text-zinc-700"
+          : status === "error"
+            ? "border-red-200 bg-red-100 text-red-800"
+            : "border-amber-200 bg-amber-100 text-amber-800"
       }
     >
-      {live ? "Tracking now" : "Waiting for activity"}
+      {labels[status]}
     </Badge>
   )
 }

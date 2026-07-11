@@ -195,7 +195,8 @@ class BootstrapInstallTest(unittest.TestCase):
             text = target.read_text(encoding="utf-8")
             self.assertEqual(install.STARTUP_SCRIPT_NAME, target.name)
             self.assertIn("ResolveTimeTracker.py", text)
-            self.assertIn("--tracker", text)
+            self.assertIn("--companion --background", text)
+            self.assertNotIn("--tracker", text)
 
     def test_electron_connects_to_existing_sidecar_before_spawning(self):
         root = Path(__file__).resolve().parents[1]
@@ -206,6 +207,8 @@ class BootstrapInstallTest(unittest.TestCase):
         self.assertIn('"reportlab"', text)
         self.assertIn("if (!(await apiIsRunning()))", text)
         self.assertIn("startSidecar()", text)
+        self.assertIn("app.requestSingleInstanceLock()", text)
+        self.assertIn('app.on("second-instance"', text)
 
     def test_uv_command_honors_bootstrap_env_path(self):
         with patch.dict(os.environ, {"RESOLVE_TIME_TRACKER_UV": "/tmp/uv"}):

@@ -21,6 +21,7 @@ from resolve_time_tracker.tracking_engine import TrackingEngine
 
 
 Now = Callable[[], datetime]
+STALE_HEARTBEAT_SECONDS = 15
 
 
 class SettingsUpdate(BaseModel):
@@ -178,6 +179,7 @@ class ApiState:
         )
         status = {
             "connection": "connected",
+            "tracking_status": "resolve_closed",
             "project": "none",
             "page": "none",
             "state": "paused",
@@ -189,6 +191,7 @@ class ApiState:
         }
         if active is not None:
             started = _parse_utc(active["started_at_utc"])
+            heartbeat = active["last_heartbeat_at_utc"]
             elapsed = max(0, int((self.now() - started).total_seconds()))
             status.update(
                 {
@@ -197,19 +200,30 @@ class ApiState:
                     "state": active["activity_category"],
                     "active_elapsed_seconds": elapsed,
                     "active_elapsed": _duration(elapsed),
-                    "heartbeat": active["last_heartbeat_at_utc"] or "none",
+                    "heartbeat": heartbeat or "none",
+                    "tracking_status": "active",
                 }
             )
+            if (
+                heartbeat
+                and (self.now() - _parse_utc(heartbeat)).total_seconds()
+                > STALE_HEARTBEAT_SECONDS
+            ):
+                status["tracking_status"] = "stale"
         elif snapshot is not None:
             status["project"] = snapshot.project_name or "none"
             status["page"] = snapshot.page or "none"
+            if snapshot.project_name:
+                status["tracking_status"] = "idle"
         if self.tracking_engine is not None:
             status["tracking_enabled"] = self.tracking_engine.tracking_enabled
             if not self.tracking_engine.tracking_enabled:
                 status["state"] = "manual pause"
+                status["tracking_status"] = "paused"
         if self.last_runtime_error:
             status["connection"] = "error"
             status["heartbeat"] = self.last_runtime_error
+            status["tracking_status"] = "error"
         return status
 
     def _settings_unlocked(self) -> dict[str, Any]:
@@ -258,7 +272,7 @@ def create_app(
 
     @app.get("/status")
     def status() -> dict[str, Any]:
-        return api.status()
+        return api.refresh()
 
     @app.post("/refresh")
     def refresh() -> dict[str, Any]:

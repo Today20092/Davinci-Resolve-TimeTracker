@@ -1,8 +1,18 @@
-const { app, BrowserWindow, dialog, ipcMain } = require("electron")
+const {
+  app,
+  BrowserWindow,
+  Menu,
+  Tray,
+  dialog,
+  ipcMain,
+  nativeImage,
+} = require("electron")
 const { spawn } = require("node:child_process")
 const fs = require("node:fs")
 const http = require("node:http")
 const path = require("node:path")
+const { trayPresentation } = require("./tray-status.cjs")
+const { restartSidecar } = require("./sidecar-lifecycle.cjs")
 
 const frontendRoot = path.resolve(__dirname, "..")
 const repoRoot = path.resolve(frontendRoot, "..")
@@ -10,11 +20,20 @@ const appName = "Resolve Time Tracker"
 const appIcon = path.join(frontendRoot, "public", "app-icon.png")
 app.setName(appName)
 app.setAppUserModelId("com.resolve-time-tracker.app")
+const hasSingleInstanceLock = app.requestSingleInstanceLock()
+if (!hasSingleInstanceLock) {
+  app.quit()
+}
 let apiPort = Number(
   process.env.RESOLVE_TIME_TRACKER_API_PORT || readArg("--port") || 8765
 )
 let apiBase = `http://127.0.0.1:${apiPort}`
 let sidecar = null
+let sidecarRestartTimer = null
+let tray = null
+let trayTimer = null
+let win = null
+let quitting = false
 let smokeFinished = false
 
 ipcMain.handle("export-pdf", async (event, filename) => {
@@ -78,7 +97,9 @@ function startSidecar() {
   sidecar.stdout.on("data", (data) => process.stdout.write(data))
   sidecar.stderr.on("data", (data) => process.stderr.write(data))
   sidecar.on("exit", (code, signal) => {
+    sidecar = null
     console.error(`Python sidecar exited: code=${code} signal=${signal}`)
+    scheduleSidecarRestart()
   })
 
   sidecar.on("error", (error) => {
@@ -89,6 +110,19 @@ function startSidecar() {
   })
 }
 
+function scheduleSidecarRestart() {
+  if (quitting || sidecarRestartTimer) return
+  sidecarRestartTimer = setTimeout(
+    restartSidecar({
+      apiIsRunning,
+      isQuitting: () => quitting,
+      onComplete: () => (sidecarRestartTimer = null),
+      startSidecar,
+    }),
+    1000
+  )
+}
+
 function stopSidecar() {
   if (sidecar && !sidecar.killed) {
     sidecar.kill()
@@ -97,20 +131,73 @@ function stopSidecar() {
 
 async function apiIsRunning(timeoutMs = 250) {
   try {
-    const status = await new Promise((resolve, reject) => {
-      const request = http.get(`${apiBase}/status`, (response) => {
-        response.resume()
-        resolve(response.statusCode)
-      })
-      request.on("error", reject)
-      request.setTimeout(timeoutMs, () => {
-        request.destroy(new Error("timeout"))
-      })
-    })
-    return status === 200
+    await fetchStatus(timeoutMs)
+    return true
   } catch {
     return false
   }
+}
+
+function fetchStatus(timeoutMs = 1000) {
+  return new Promise((resolve, reject) => {
+    const request = http.get(`${apiBase}/status`, (response) => {
+      let body = ""
+      response.setEncoding("utf8")
+      response.on("data", (chunk) => (body += chunk))
+      response.on("end", () => {
+        if (response.statusCode !== 200) {
+          reject(new Error(`status ${response.statusCode}`))
+          return
+        }
+        resolve(JSON.parse(body))
+      })
+    })
+    request.on("error", reject)
+    request.setTimeout(timeoutMs, () => request.destroy(new Error("timeout")))
+  })
+}
+
+function trayIcon(color) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><circle cx="8" cy="8" r="7" fill="${color}"/></svg>`
+  return nativeImage.createFromDataURL(
+    `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`
+  )
+}
+
+async function updateTray() {
+  let status = null
+  try {
+    status = await fetchStatus()
+  } catch {
+    scheduleSidecarRestart()
+  }
+  const presentation = trayPresentation(status)
+  tray.setImage(trayIcon(presentation.color))
+  tray.setToolTip(presentation.tooltip)
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: presentation.label, enabled: false },
+      { label: "Open Resolve Time Tracker", click: showWindow },
+      { type: "separator" },
+      { label: "Quit", click: () => app.quit() },
+    ])
+  )
+}
+
+function showWindow() {
+  if (!win || win.isDestroyed()) {
+    createWindow()
+  } else {
+    win.show()
+    win.focus()
+  }
+}
+
+function createTray() {
+  tray = new Tray(trayIcon("#ef4444"))
+  tray.on("click", showWindow)
+  void updateTray()
+  trayTimer = setInterval(updateTray, 5000)
 }
 
 async function apiSupportsPdf(timeoutMs = 250) {
@@ -152,7 +239,6 @@ async function chooseApiPort() {
   }
 }
 
-
 function finishSmoke(ok, message = null) {
   if (smokeFinished) {
     return
@@ -175,7 +261,7 @@ async function waitForApi() {
 }
 
 function createWindow() {
-  const win = new BrowserWindow({
+  win = new BrowserWindow({
     width: 1120,
     height: 720,
     minWidth: 900,
@@ -189,6 +275,12 @@ function createWindow() {
       sandbox: true,
       preload: path.join(__dirname, "preload.cjs"),
     },
+  })
+  win.on("close", (event) => {
+    if (!quitting) {
+      event.preventDefault()
+      win.hide()
+    }
   })
 
   const devUrl = hasArg("--dev")
@@ -223,14 +315,21 @@ function createWindow() {
   }
 }
 
+app.on("second-instance", showWindow)
+
 app.whenReady().then(async () => {
+  if (!hasSingleInstanceLock) return
   try {
     await chooseApiPort()
     if (!(await apiIsRunning())) {
       startSidecar()
     }
     await waitForApi()
+    createTray()
     createWindow()
+    if (hasArg("--background")) {
+      win.hide()
+    }
   } catch (error) {
     if (hasArg("--smoke-test")) {
       finishSmoke(false, error.message)
@@ -248,11 +347,12 @@ app.whenReady().then(async () => {
 })
 
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit()
-  }
+  // The tray owns the background tracker lifecycle.
 })
 
 app.on("before-quit", () => {
+  quitting = true
+  clearInterval(trayTimer)
+  clearTimeout(sidecarRestartTimer)
   stopSidecar()
 })

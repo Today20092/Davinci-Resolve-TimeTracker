@@ -26,6 +26,73 @@ class SequenceSnapshotProvider:
 
 
 class ApiTest(unittest.TestCase):
+    def test_status_poll_refreshes_tracking_without_the_companion_window(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with SQLiteStore(
+                Path(tmp) / "tracker.sqlite3", check_same_thread=False
+            ) as store:
+                tracker = TrackingEngine(
+                    store,
+                    snapshot_provider=SequenceSnapshotProvider(
+                        [RuntimeSnapshot("Project A", "edit", False, 0, True)]
+                    ),
+                )
+                client = TestClient(
+                    create_app(store, tracking_engine=tracker, now=lambda: utc(9))
+                )
+
+                status = client.get("/status").json()
+
+        self.assertEqual("active", status["tracking_status"])
+
+    def test_status_marks_an_old_heartbeat_stale(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with SQLiteStore(
+                Path(tmp) / "tracker.sqlite3", check_same_thread=False
+            ) as store:
+                tracker = TrackingEngine(
+                    store,
+                    snapshot_provider=SequenceSnapshotProvider(
+                        [RuntimeSnapshot("Project A", "edit", False, 0, True)]
+                    ),
+                )
+                tracker.poll(utc(9))
+                client = TestClient(create_app(store, now=lambda: utc(9, 1)))
+
+                status = client.get("/status").json()
+
+        self.assertEqual("stale", status["tracking_status"])
+
+    def test_status_reports_whether_time_is_actually_being_tracked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with SQLiteStore(
+                Path(tmp) / "tracker.sqlite3", check_same_thread=False
+            ) as store:
+                tracker = TrackingEngine(
+                    store,
+                    snapshot_provider=SequenceSnapshotProvider(
+                        [
+                            RuntimeSnapshot("Project A", "edit", False, 0, True),
+                            RuntimeSnapshot("Project A", "edit", False, 301, True),
+                            RuntimeSnapshot(None, None, False, 0, False),
+                        ]
+                    ),
+                )
+                app = create_app(store, tracking_engine=tracker, now=lambda: utc(9))
+                client = TestClient(app)
+
+                active = client.post("/refresh").json()
+                idle = client.post("/refresh").json()
+                closed = client.post("/refresh").json()
+                paused = client.post("/tracking/pause").json()
+                error = client.post("/tracking/resume").json()
+
+        self.assertEqual("active", active["tracking_status"])
+        self.assertEqual("idle", idle["tracking_status"])
+        self.assertEqual("resolve_closed", closed["tracking_status"])
+        self.assertEqual("paused", paused["tracking_status"])
+        self.assertEqual("error", error["tracking_status"])
+
     def test_status_projects_sessions_settings_and_csv(self):
         with tempfile.TemporaryDirectory() as tmp:
             with SQLiteStore(
