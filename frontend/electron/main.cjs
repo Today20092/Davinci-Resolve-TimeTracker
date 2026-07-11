@@ -161,11 +161,24 @@ function stopSidecar() {
 
 async function apiIsRunning(timeoutMs = 250) {
   try {
-    await fetchStatus(timeoutMs)
+    await fetchHealth(timeoutMs)
     return true
   } catch {
     return false
   }
+}
+
+function fetchHealth(timeoutMs = 1000) {
+  return new Promise((resolve, reject) => {
+    const request = http.get(`${apiBase}/health`, (response) => {
+      response.resume()
+      response.statusCode === 200
+        ? resolve()
+        : reject(new Error(`status ${response.statusCode}`))
+    })
+    request.on("error", reject)
+    request.setTimeout(timeoutMs, () => request.destroy(new Error("timeout")))
+  })
 }
 
 function fetchStatus(timeoutMs = 1000) {

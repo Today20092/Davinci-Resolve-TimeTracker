@@ -382,6 +382,10 @@ def create_app(
     )
     app.state.api = api
 
+    @app.get("/health")
+    def health() -> dict[str, bool]:
+        return {"ok": True}
+
     @app.get("/status")
     def status() -> dict[str, Any]:
         return api.refresh()
