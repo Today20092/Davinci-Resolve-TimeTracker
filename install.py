@@ -44,6 +44,16 @@ def source_dir_for(installer_path: Path, requested: Path | None) -> Path:
     return default_source_dir()
 
 
+def prerequisite_errors(source_dir: Path) -> list[str]:
+    errors = []
+    if not is_source_checkout(source_dir) and shutil.which("git") is None:
+        errors.append("Git is required to download the project source.")
+    npm = "npm.cmd" if os.name == "nt" else "npm"
+    if shutil.which(npm) is None:
+        errors.append("Node.js with npm is required to build the desktop app.")
+    return errors
+
+
 def ensure_source(source_dir: Path, repo_url: str, update: bool) -> None:
     if is_source_checkout(source_dir):
         print(f"[3/7] Using existing source checkout: {source_dir}", flush=True)
@@ -268,6 +278,9 @@ def main() -> int:
     print("  - Install the DaVinci Resolve Scripts menu entry.", flush=True)
     print("  - Ask before enabling background auto-start.", flush=True)
     print("", flush=True)
+    errors = prerequisite_errors(source_dir)
+    if errors:
+        raise RuntimeError("\n".join(errors))
     if not confirm_install():
         print("Install cancelled.")
         return 0

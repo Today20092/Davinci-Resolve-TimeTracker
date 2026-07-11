@@ -13,6 +13,14 @@
 
 Resolve Time Tracker is an MIT-licensed, open-source time tracker for DaVinci Resolve Studio. It tracks billable editing time per Resolve project while avoiding the classic mistake: counting time after the editor has walked away.
 
+## Requirements
+
+- DaVinci Resolve Studio. The latest Resolve Studio release is the actively tested target; Windows with Resolve Studio 21 is currently verified.
+- Git, used to download and update the project.
+- Node.js with npm, used to build the desktop app.
+
+The installer supplies `uv`, Python 3.13, Python packages, and frontend packages. macOS and Linux support is available but still needs broader real-machine testing; see [Platform Support](#platform-support).
+
 ## Install
 
 Resolve Time Tracker installs as a DaVinci Resolve Scripts-menu tool. After install, open Resolve and run:
@@ -35,6 +43,8 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 
 The installer downloads the project source, installs Python dependencies, builds the companion app, and adds the DaVinci Resolve menu script.
 It asks whether tracking should stay manual or start automatically with your computer. Manual start is the default.
+
+If Git or Node.js with npm is missing, the installer stops before changing the installation and explains what to install.
 
 ### What "Start automatically" means
 
@@ -61,6 +71,25 @@ sh install.sh
 
 Restart Resolve if it was already open.
 
+### Uninstall
+
+Download and run the uninstaller for your platform:
+
+| Platform | Download |
+| --- | --- |
+| Windows | [uninstall.ps1](https://raw.githubusercontent.com/Today20092/Davinci-Resolve-TimeTracker/main/uninstall.ps1) |
+| macOS / Linux | [uninstall.sh](https://raw.githubusercontent.com/Today20092/Davinci-Resolve-TimeTracker/main/uninstall.sh) |
+
+```powershell
+.\uninstall.ps1
+```
+
+```sh
+sh uninstall.sh
+```
+
+Quit Resolve Time Tracker from its tray menu first. The uninstaller shows every location it will remove and asks for confirmation. It separately asks whether to permanently delete `tracker.sqlite3`; choosing No preserves all tracked projects and time.
+
 ## Use
 
 Open Resolve and run:
@@ -69,7 +98,7 @@ Open Resolve and run:
 Workspace > Scripts > ResolveTimeTrackerMenu
 ```
 
-The companion window shows tracking status, current project, current page, activity category, heartbeat, sessions, settings, and CSV export. Use **Pause Tracking** when you want to stop tracking manually, and **Resume Tracking** when you want it to start again.
+The companion window shows whether time is being recorded, the open Resolve project and page, saved work sessions, settings, and report exports. Use **Pause Tracking** to stop the timer manually and **Resume Tracking** to start it again.
 
 If you opted into background startup during install, the tracker starts in the Windows system tray and records Resolve activity even when the companion window is closed. Green means time is actively being recorded, yellow means idle or paused, gray means Resolve is closed, and red means the tracker is disconnected.
 
@@ -124,17 +153,22 @@ Linux: $XDG_DATA_HOME/ResolveTimeTracker/tracker.sqlite3 or ~/.local/share/Resol
 
 More detail lives in [docs/platform-support.md](docs/platform-support.md).
 
-## Install Details
+## Need Help?
 
-The platform installer:
-
-- Installs `uv` with Astral's official installer if missing.
-- Syncs the project `.venv` with `uv` on Python 3.13.
-- Installs and builds the Electron companion UI from `frontend/`.
-- Installs `ResolveTimeTrackerMenu.py` into Resolve's Scripts/Utility folder.
-- Verifies the Resolve menu script points at this checkout.
+See [Troubleshooting](docs/troubleshooting.md) when the Resolve menu item is missing, the tracker is disconnected, or time is not increasing.
 
 ## Architecture
+
+### Diagram Key
+
+Both diagrams use the same visual language:
+
+- **Orange:** where the user starts an action.
+- **Blue:** DaVinci Resolve or an operating-system startup path.
+- **Green:** the desktop app and results visible to the user.
+- **Purple:** background work performed by the tracker.
+- **Pink:** data stored privately on the computer.
+- **Rectangle:** an action or part of the tracker; **diamond:** a choice; **cylinder:** stored data; **dotted line:** an explanatory note rather than a runtime step.
 
 ### Runtime Flow
 
@@ -142,11 +176,8 @@ How Resolve, the desktop companion, the local Python sidecar, and local storage 
 
 ```mermaid
 flowchart TD
-  Start{"How does it start?"}
-  Menu["You choose the tracker<br/>from Resolve's Scripts menu"] --> Start
-  Login["Windows starts it at sign-in<br/>if you enabled automatic startup"] --> Start
-
-  Start --> App["Desktop app<br/>dashboard window + system tray"]
+  Menu["You choose the tracker<br/>from Resolve's Scripts menu"] --> App["Desktop app<br/>dashboard window + system tray"]
+  Login["Windows starts it at sign-in<br/>if you enabled automatic startup"] --> App
   App --> Tracker["Background tracker<br/>keeps the timer running"]
 
   Resolve["DaVinci Resolve<br/>project, page, and render status"] --> Tracker
@@ -168,8 +199,8 @@ flowchart TD
   classDef backend fill:#eef2ff,stroke:#4f46e5,color:#312e81
   classDef data fill:#fdf2f8,stroke:#db2777,color:#831843
 
-  class User user
-  class Menu,Login,Resolve resolve
+  class Menu user
+  class Login,Resolve resolve
   class App,Reports desktop
   class Tracker,Decision,Activity,Wait backend
   class Database data
@@ -190,7 +221,7 @@ flowchart TD
   Choice -->|Yes| Automatic["The tracker starts quietly<br/>in the system tray at sign-in"]
 
   Manual --> Ready["Installation complete"]
-  Automatic --> Ready
+  Automatic --> Done["Installation complete<br/>tracking starts at next sign-in"]
   Menu --> Ready
   Ready --> Use["Open Resolve and choose<br/>Workspace → Scripts → ResolveTimeTrackerMenu"]
 
@@ -202,7 +233,7 @@ flowchart TD
 
   class Download bootstrap
   class Prepare setup
-  class Menu,Choice,Manual,Automatic,Ready,Use resolve
+  class Menu,Choice,Manual,Automatic,Ready,Done,Use resolve
 ```
 
 | Area | Files | Responsibility |
@@ -215,25 +246,9 @@ flowchart TD
 | Resolve adapter | `src/resolve_time_tracker/resolve_bridge.py` | Reads project, Page, render, timeline, idle, and foreground state. |
 | Storage | `src/resolve_time_tracker/database.py` | Stores Projects, active Session, closed Sessions, settings, heartbeat recovery, summaries, and CSV output in SQLite. |
 
-## Development
+## Development and Contributing
 
-This project targets Python because DaVinci Resolve exposes Python scripting.
-
-```powershell
-uv sync --python 3.13
-uv run ruff format .
-uv run ruff check .
-uv run --python 3.13 scripts/ResolveTimeTracker.py --version
-uv run -m unittest discover -s tests
-cd frontend
-npm run desktop:dev
-```
-
-Useful docs:
-
-- [docs/roadmap.md](docs/roadmap.md)
-- [docs/platform-support.md](docs/platform-support.md)
-- [CONTRIBUTING.md](CONTRIBUTING.md)
+The [Development Guide](docs/development.md) covers prerequisites, repository structure, local startup, API access, tests, linting, and builds. See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
 ## Credits
 

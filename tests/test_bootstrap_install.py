@@ -8,6 +8,16 @@ import install
 
 
 class BootstrapInstallTest(unittest.TestCase):
+    def test_preflight_reports_missing_external_tools(self):
+        with patch("install.shutil.which", return_value=None):
+            self.assertEqual(
+                [
+                    "Git is required to download the project source.",
+                    "Node.js with npm is required to build the desktop app.",
+                ],
+                install.prerequisite_errors(Path("missing-source")),
+            )
+
     def test_detects_source_checkout(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
