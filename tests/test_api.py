@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from fastapi.testclient import TestClient
 
@@ -295,6 +295,19 @@ class ApiTest(unittest.TestCase):
                 )
 
         self.assertEqual("*", response.headers["access-control-allow-origin"])
+
+    def test_health_does_not_poll_resolve(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            engine = Mock()
+            with SQLiteStore(
+                Path(tmp) / "tracker.sqlite3", check_same_thread=False
+            ) as store:
+                response = TestClient(create_app(store, tracking_engine=engine)).get(
+                    "/health"
+                )
+
+        self.assertEqual({"ok": True}, response.json())
+        engine.poll.assert_not_called()
 
     def test_run_api_starts_tracking_api_with_resolve_bridge(self):
         with tempfile.TemporaryDirectory() as tmp:
