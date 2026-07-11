@@ -14,6 +14,10 @@ const http = require("node:http")
 const path = require("node:path")
 const { trayPresentation } = require("./tray-status.cjs")
 const { restartSidecar } = require("./sidecar-lifecycle.cjs")
+const {
+  setStartupEnabled,
+  startupEnabled,
+} = require("./startup-settings.cjs")
 
 const frontendRoot = path.resolve(__dirname, "..")
 const repoRoot = path.resolve(frontendRoot, "..")
@@ -40,24 +44,16 @@ let smokeFinished = false
 
 ipcMain.handle("desktop-settings", () => ({
   launchAtStartup:
-    process.platform === "win32" &&
-    app.getLoginItemSettings({
-      path: process.execPath,
-      args: ["--background"],
-    }).openAtLogin,
+    process.platform === "win32" && startupEnabled(app.getPath("appData")),
 }))
 
 ipcMain.handle("set-launch-at-startup", (_event, enabled) => {
   if (process.platform !== "win32") return false
-  app.setLoginItemSettings({
-    openAtLogin: Boolean(enabled),
-    path: process.execPath,
-    args: ["--background"],
+  return setStartupEnabled({
+    appData: app.getPath("appData"),
+    repoRoot,
+    enabled: Boolean(enabled),
   })
-  return app.getLoginItemSettings({
-    path: process.execPath,
-    args: ["--background"],
-  }).openAtLogin
 })
 
 ipcMain.handle("set-close-behavior", (_event, behavior) => {

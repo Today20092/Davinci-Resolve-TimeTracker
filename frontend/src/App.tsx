@@ -250,7 +250,12 @@ function App() {
 
   async function changeLaunchAtStartup(enabled: boolean) {
     if (!window.desktop) return
-    setLaunchAtStartup(await window.desktop.setLaunchAtStartup(enabled))
+    try {
+      setLaunchAtStartup(await window.desktop.setLaunchAtStartup(enabled))
+      setError(null)
+    } catch (error) {
+      setError(formatSidecarError(error))
+    }
   }
 
   function sortProjects(key: keyof ProjectSummary) {

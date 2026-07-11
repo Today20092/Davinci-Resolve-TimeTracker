@@ -28,7 +28,7 @@ test("settings expose desktop preferences", async () => {
   ]) {
     assert.match(app, new RegExp(label))
   }
-  assert.match(main, /args: \["--background"\]/)
+  assert.match(main, /startupEnabled/)
   assert.match(main, /closeBehavior === "tray"/)
   assert.match(main, /shell\.showItemInFolder/)
 })
