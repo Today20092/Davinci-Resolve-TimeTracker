@@ -216,7 +216,7 @@ flowchart TD
 
 | Area | Files | Responsibility |
 | --- | --- | --- |
-| Plugin entry | `scripts/ResolveTimeTracker.py` | Chooses launcher mode: Resolve UI, Electron companion, FastAPI sidecar, or version output. |
+| Plugin entry | `scripts/ResolveTimeTracker.py` | Launches the Electron companion by default, or the FastAPI sidecar when requested. |
 | Install path | `install.py`, `install.ps1`, `install.sh`, `scripts/install_resolve_menu.py` | Prepares Python and frontend dependencies, then installs the Resolve Scripts-menu launcher. |
 | Interface | `frontend/` | Electron opens the desktop window; React, Vite, Tailwind, and shadcn/ui render status, history, settings, edits, and CSV export. |
 | Backend API | `src/resolve_time_tracker/api.py` | FastAPI exposes localhost REST endpoints and server-sent live status events. |
