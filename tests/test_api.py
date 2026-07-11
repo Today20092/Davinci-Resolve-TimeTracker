@@ -302,9 +302,9 @@ class ApiTest(unittest.TestCase):
             with SQLiteStore(
                 Path(tmp) / "tracker.sqlite3", check_same_thread=False
             ) as store:
-                response = TestClient(
-                    create_app(store, tracking_engine=engine)
-                ).get("/health")
+                response = TestClient(create_app(store, tracking_engine=engine)).get(
+                    "/health"
+                )
 
         self.assertEqual({"ok": True}, response.json())
         engine.poll.assert_not_called()
