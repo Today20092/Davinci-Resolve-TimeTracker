@@ -299,12 +299,16 @@ class ApiState:
             )
 
         recent = sorted(
-            project_sessions, key=lambda session: session["started_at_utc"], reverse=True
+            project_sessions,
+            key=lambda session: session["started_at_utc"],
+            reverse=True,
         )[:5]
         last_activity = (
             status["heartbeat"]
             if status["tracking_status"] == "active"
-            else recent[0]["ended_at_utc"] if recent else "none"
+            else recent[0]["ended_at_utc"]
+            if recent
+            else "none"
         )
         tracked_seconds = sum(activity_totals.values())
         current_project = {
@@ -312,7 +316,8 @@ class ApiState:
             "totals": {
                 "tracked_seconds": tracked_seconds,
                 "today_seconds": today_seconds,
-                "session_count": len(project_sessions) + (1 if active is not None else 0),
+                "session_count": len(project_sessions)
+                + (1 if active is not None else 0),
             },
             "activity_totals": activity_totals,
             "page_totals": [

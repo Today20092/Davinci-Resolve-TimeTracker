@@ -67,9 +67,7 @@ class ApiTest(unittest.TestCase):
                 now[0] = utc(12)
                 dashboard = client.get("/dashboard").json()
 
-        self.assertEqual(
-            2, just_opened["current_project"]["totals"]["session_count"]
-        )
+        self.assertEqual(2, just_opened["current_project"]["totals"]["session_count"])
         self.assertEqual("Project A", dashboard["status"]["project"])
         self.assertEqual(1, len(dashboard["projects"]))
         self.assertEqual(1, len(dashboard["sessions"]))
@@ -83,7 +81,9 @@ class ApiTest(unittest.TestCase):
         )
         self.assertEqual("2026-01-02T12:00:00Z", current["last_activity"])
         self.assertEqual("Project A", dashboard["export_preview"]["project"])
-        self.assertEqual("01/02/2026 - 01/02/2026", dashboard["export_preview"]["date_range"])
+        self.assertEqual(
+            "01/02/2026 - 01/02/2026", dashboard["export_preview"]["date_range"]
+        )
 
     def test_status_poll_refreshes_tracking_without_the_companion_window(self):
         with tempfile.TemporaryDirectory() as tmp:
