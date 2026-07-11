@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from resolve_time_tracker.api import create_app, run_api
+from resolve_time_tracker.api import _seconds_on_local_date, create_app, run_api
 from resolve_time_tracker.database import SQLiteStore
 from resolve_time_tracker.tracking_engine import RuntimeSnapshot, TrackingEngine
 
@@ -26,6 +26,23 @@ class SequenceSnapshotProvider:
 
 
 class ApiTest(unittest.TestCase):
+    def test_local_day_uses_dst_aware_midnight_boundaries(self):
+        spring_forward = datetime(2026, 3, 8).date()
+        with patch(
+            "resolve_time_tracker.api.time.mktime",
+            side_effect=[
+                datetime(2026, 3, 8, 5, tzinfo=timezone.utc).timestamp(),
+                datetime(2026, 3, 9, 4, tzinfo=timezone.utc).timestamp(),
+            ],
+        ):
+            seconds = _seconds_on_local_date(
+                datetime(2026, 3, 8, tzinfo=timezone.utc),
+                datetime(2026, 3, 10, tzinfo=timezone.utc),
+                spring_forward,
+            )
+
+        self.assertEqual(23 * 60 * 60, seconds)
+
     def test_dashboard_returns_current_project_read_model(self):
         with tempfile.TemporaryDirectory() as tmp:
             with SQLiteStore(

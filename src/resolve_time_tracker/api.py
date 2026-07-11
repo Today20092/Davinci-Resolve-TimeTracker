@@ -494,9 +494,9 @@ def _display_page(page: str, category: str) -> str:
 
 
 def _seconds_on_local_date(started: datetime, ended: datetime, day: date) -> int:
-    local_now = datetime.now().astimezone()
-    start_of_day = datetime.combine(day, datetime.min.time(), tzinfo=local_now.tzinfo)
-    end_of_day = start_of_day + timedelta(days=1)
-    overlap_start = max(started.astimezone(), start_of_day)
-    overlap_end = min(ended.astimezone(), end_of_day)
+    next_day = day + timedelta(days=1)
+    start_of_day = datetime.fromtimestamp(time.mktime(day.timetuple()), timezone.utc)
+    end_of_day = datetime.fromtimestamp(time.mktime(next_day.timetuple()), timezone.utc)
+    overlap_start = max(started.astimezone(timezone.utc), start_of_day)
+    overlap_end = min(ended.astimezone(timezone.utc), end_of_day)
     return max(0, int((overlap_end - overlap_start).total_seconds()))
