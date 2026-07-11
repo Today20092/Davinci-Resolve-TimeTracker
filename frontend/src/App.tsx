@@ -297,6 +297,12 @@ function App() {
   async function exportPdf() {
     if (!projectDashboard.project) return
     try {
+      const filename = `${projectDashboard.project.replaceAll(" ", "-")}-time-report.pdf`
+      if (window.desktop) {
+        await window.desktop.exportPdf(filename)
+        setError(null)
+        return
+      }
       const options: PdfExportOptions = {
         project_name: projectDashboard.project,
         ...pdfOptions,
@@ -305,7 +311,7 @@ function App() {
       const url = URL.createObjectURL(blob)
       const link = document.createElement("a")
       link.href = url
-      link.download = `${projectDashboard.project.replaceAll(" ", "-")}-time-report.pdf`
+      link.download = filename
       link.click()
       URL.revokeObjectURL(url)
       setError(null)

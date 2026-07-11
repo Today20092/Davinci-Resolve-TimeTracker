@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog } = require("electron")
+const { app, BrowserWindow, dialog, ipcMain } = require("electron")
 const { spawn } = require("node:child_process")
 const fs = require("node:fs")
 const http = require("node:http")
@@ -16,6 +16,23 @@ let apiPort = Number(
 let apiBase = `http://127.0.0.1:${apiPort}`
 let sidecar = null
 let smokeFinished = false
+
+ipcMain.handle("export-pdf", async (event, filename) => {
+  const window = BrowserWindow.fromWebContents(event.sender)
+  const { canceled, filePath } = await dialog.showSaveDialog(window, {
+    defaultPath: filename,
+    filters: [{ name: "PDF", extensions: ["pdf"] }],
+  })
+  if (canceled || !filePath) return false
+
+  const pdf = await event.sender.printToPDF({
+    pageSize: "Letter",
+    printBackground: true,
+    preferCSSPageSize: true,
+  })
+  fs.writeFileSync(filePath, pdf)
+  return true
+})
 
 function readArg(name) {
   const index = process.argv.indexOf(name)
@@ -170,6 +187,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      preload: path.join(__dirname, "preload.cjs"),
     },
   })
 
