@@ -4,6 +4,8 @@ Resolve Time Tracker is early, so small focused changes are preferred.
 
 ## Setup
 
+Follow the [Development Guide](docs/development.md) for local setup and the Resolve development-menu workflow. If you are preparing the repository with an AI coding agent, use the [Agentic Development Prompt](docs/agentic-development-prompt.md).
+
 ```sh
 uv sync
 ```

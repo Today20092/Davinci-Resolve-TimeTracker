@@ -41,6 +41,20 @@ npm run desktop:dev
 
 Electron starts the Python tracker and opens the React development server. DaVinci Resolve must be running with a project open to show live project activity.
 
+### Launch development mode from Resolve
+
+Install this checkout's Resolve menu entries:
+
+```powershell
+uv run --python 3.13 scripts/install_resolve_menu.py
+```
+
+Restart Resolve, then choose **Workspace > Scripts > ResolveTimeTrackerDevMenu**. This starts Vite and Electron in development mode, so frontend source changes hot-reload without rebuilding `frontend/dist`.
+
+Use **ResolveTimeTrackerMenu** when testing the built application. Quit an existing tracker from its tray menu before switching launch modes; Electron allows only one tracker instance. Restart the development launcher after Python or Electron main-process changes because Vite hot reload applies only to renderer source.
+
+If the development entry is missing, rerun the installer above and restart Resolve. If startup fails, run `npm run desktop:dev` from `frontend/` to keep the error visible.
+
 ## Run Checks
 
 Python, from the repository root:
