@@ -83,7 +83,9 @@ class LauncherTest(unittest.TestCase):
         self.assertEqual(9000, run_api.call_args.kwargs["port"])
 
     def test_default_launches_electron(self):
-        with patch("scripts.ResolveTimeTracker.run_electron_companion", return_value=0) as run:
+        with patch(
+            "scripts.ResolveTimeTracker.run_electron_companion", return_value=0
+        ) as run:
             self.assertEqual(0, main([]))
 
         run.assert_called_once_with(default_db_path(), background=False)
