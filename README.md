@@ -36,6 +36,15 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 The installer downloads the project source, installs Python dependencies, builds the companion app, and adds the DaVinci Resolve menu script.
 It asks whether tracking should stay manual or start automatically with your computer. Manual start is the default.
 
+### What "Start automatically" means
+
+This choice currently applies to Windows:
+
+- **Yes:** the installer adds `ResolveTimeTrackerBackground.cmd` to your Windows Startup folder. Each time you sign in, Windows starts a hidden Python process that runs the tracker's local API and checks Resolve activity. The process stays in memory while you are signed in, including on days when you do not open Resolve. It should do little work when unused, but it does use some RAM. It does not open the Electron window automatically.
+- **No (default):** the installer does not add anything to Windows Startup. No Resolve Time Tracker process runs after sign-in. Start it only when needed from `Workspace > Scripts > ResolveTimeTrackerMenu` in DaVinci Resolve.
+
+Choosing Yes does not give the tracker control of your computer. It only starts the same local tracker automatically and keeps its API on `127.0.0.1` (your computer only). The tracker records project timing and activity state; it does not record keystrokes, mouse coordinates, screen contents, footage, or media contents.
+
 For Linux activity detection, install `xprintidle` and `xdotool` with your distro package manager. Without them, the tracker can still run, but it falls back to always-active tracking.
 
 ### Update
