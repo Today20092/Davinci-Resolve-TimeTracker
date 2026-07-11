@@ -390,7 +390,7 @@ function App() {
                             axisLine={false}
                             tickLine={false}
                             type="category"
-                            width={72}
+                            width={96}
                           />
                           <ChartTooltip
                             content={
