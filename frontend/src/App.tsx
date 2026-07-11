@@ -5,6 +5,7 @@ import {
   IconDownload,
   IconFolderOpen,
   IconInfoCircle,
+  IconFolder,
   IconPencil,
   IconPlayerPause,
   IconPlayerPlay,
@@ -170,7 +171,11 @@ function App() {
   const [editForm, setEditForm] = useState<SessionUpdate | null>(null)
   const [idleMinutes, setIdleMinutes] = useState("5")
   const [pdfOptions, setPdfOptions] = useState(defaultPdfOptions)
-  const [theme, setTheme] = useState(() => localStorage.theme || "light")
+  const [theme, setTheme] = useState(() => localStorage.theme || "system")
+  const [launchAtStartup, setLaunchAtStartup] = useState(false)
+  const [closeBehavior, setCloseBehavior] = useState<"tray" | "quit">(
+    () => localStorage.closeBehavior || "tray"
+  )
   const [error, setError] = useState<string | null>(null)
   const [sessionSort, setSessionSort] = useState<{
     key: keyof Session
@@ -224,9 +229,36 @@ function App() {
   }, [])
 
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", theme === "dark")
+    const media = matchMedia("(prefers-color-scheme: dark)")
+    const applyTheme = () =>
+      document.documentElement.classList.toggle(
+        "dark",
+        theme === "dark" || (theme === "system" && media.matches)
+      )
+    applyTheme()
     localStorage.theme = theme
+    media.addEventListener("change", applyTheme)
+    return () => media.removeEventListener("change", applyTheme)
   }, [theme])
+
+  useEffect(() => {
+    if (!window.desktop) return
+    void window.desktop
+      .getSettings()
+      .then(({ launchAtStartup }) => setLaunchAtStartup(launchAtStartup))
+    void window.desktop.setCloseBehavior(closeBehavior)
+  }, [closeBehavior])
+
+  async function changeLaunchAtStartup(enabled: boolean) {
+    if (!window.desktop) return
+    setLaunchAtStartup(await window.desktop.setLaunchAtStartup(enabled))
+  }
+
+  function changeCloseBehavior(value: string) {
+    if (value !== "tray" && value !== "quit") return
+    localStorage.closeBehavior = value
+    setCloseBehavior(value)
+  }
 
   const totals = useMemo(() => {
     const seconds = projects.reduce(
@@ -983,7 +1015,63 @@ function App() {
                     <ToggleGroupItem className="flex-1" value="dark">
                       Dark
                     </ToggleGroupItem>
+                    <ToggleGroupItem className="flex-1" value="system">
+                      System
+                    </ToggleGroupItem>
                   </ToggleGroup>
+                  {window.desktop && (
+                    <>
+                      <Label htmlFor="startup">Windows startup</Label>
+                      <ToggleGroup
+                        id="startup"
+                        type="single"
+                        value={launchAtStartup ? "on" : "off"}
+                        variant="outline"
+                        spacing={0}
+                        className="w-full"
+                        onValueChange={(value) =>
+                          value && void changeLaunchAtStartup(value === "on")
+                        }
+                      >
+                        <ToggleGroupItem className="flex-1" value="off">
+                          Off
+                        </ToggleGroupItem>
+                        <ToggleGroupItem className="flex-1" value="on">
+                          Start minimized to tray
+                        </ToggleGroupItem>
+                      </ToggleGroup>
+                      <Label htmlFor="close-behavior">When closing</Label>
+                      <ToggleGroup
+                        id="close-behavior"
+                        type="single"
+                        value={closeBehavior}
+                        variant="outline"
+                        spacing={0}
+                        className="w-full"
+                        onValueChange={changeCloseBehavior}
+                      >
+                        <ToggleGroupItem className="flex-1" value="tray">
+                          Keep running in tray
+                        </ToggleGroupItem>
+                        <ToggleGroupItem className="flex-1" value="quit">
+                          Quit tracker
+                        </ToggleGroupItem>
+                      </ToggleGroup>
+                      <Label>Data location</Label>
+                      <Input value={status.db_path} readOnly />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={!status.db_path}
+                        onClick={() =>
+                          void window.desktop?.openDataFolder(status.db_path)
+                        }
+                      >
+                        <IconFolder data-icon="inline-start" />
+                        Open data folder
+                      </Button>
+                    </>
+                  )}
                 </div>
               </CardContent>
             </Card>

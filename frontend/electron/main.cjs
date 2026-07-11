@@ -6,6 +6,7 @@ const {
   dialog,
   ipcMain,
   nativeImage,
+  shell,
 } = require("electron")
 const { spawn } = require("node:child_process")
 const fs = require("node:fs")
@@ -34,7 +35,40 @@ let tray = null
 let trayTimer = null
 let win = null
 let quitting = false
+let closeBehavior = "tray"
 let smokeFinished = false
+
+ipcMain.handle("desktop-settings", () => ({
+  launchAtStartup:
+    process.platform === "win32" &&
+    app.getLoginItemSettings({
+      path: process.execPath,
+      args: ["--background"],
+    }).openAtLogin,
+}))
+
+ipcMain.handle("set-launch-at-startup", (_event, enabled) => {
+  if (process.platform !== "win32") return false
+  app.setLoginItemSettings({
+    openAtLogin: Boolean(enabled),
+    path: process.execPath,
+    args: ["--background"],
+  })
+  return app.getLoginItemSettings({
+    path: process.execPath,
+    args: ["--background"],
+  }).openAtLogin
+})
+
+ipcMain.handle("set-close-behavior", (_event, behavior) => {
+  closeBehavior = behavior === "quit" ? "quit" : "tray"
+})
+
+ipcMain.handle("open-data-folder", (_event, dbPath) => {
+  if (typeof dbPath !== "string" || !dbPath) return false
+  shell.showItemInFolder(path.resolve(dbPath))
+  return true
+})
 
 ipcMain.handle("export-pdf", async (event, filename) => {
   const window = BrowserWindow.fromWebContents(event.sender)
@@ -277,9 +311,13 @@ function createWindow() {
     },
   })
   win.on("close", (event) => {
-    if (!quitting) {
+    if (!quitting && closeBehavior === "tray") {
       event.preventDefault()
       win.hide()
+    } else if (!quitting) {
+      event.preventDefault()
+      quitting = true
+      app.quit()
     }
   })
 

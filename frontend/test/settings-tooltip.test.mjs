@@ -11,3 +11,24 @@ test("idle timeout explains that rendering still counts", async () => {
     /Rendering and exporting continue to count as active work,[\s\S]*even after this idle timeout\./
   )
 })
+
+test("settings expose desktop preferences", async () => {
+  const app = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8")
+  const main = await readFile(
+    new URL("../electron/main.cjs", import.meta.url),
+    "utf8"
+  )
+
+  for (const label of [
+    "System",
+    "Start minimized to tray",
+    "Keep running in tray",
+    "Quit tracker",
+    "Open data folder",
+  ]) {
+    assert.match(app, new RegExp(label))
+  }
+  assert.match(main, /args: \["--background"\]/)
+  assert.match(main, /closeBehavior === "tray"/)
+  assert.match(main, /shell\.showItemInFolder/)
+})
