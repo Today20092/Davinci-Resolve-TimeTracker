@@ -9,6 +9,9 @@ import {
   IconPlayerPlay,
   IconPrinter,
   IconRefresh,
+  IconSelector,
+  IconSortAscending,
+  IconSortDescending,
 } from "@tabler/icons-react"
 
 import {
@@ -134,6 +137,46 @@ function App() {
   const [pdfOptions, setPdfOptions] = useState(defaultPdfOptions)
   const [theme, setTheme] = useState(() => localStorage.theme || "light")
   const [error, setError] = useState<string | null>(null)
+  const [sessionSort, setSessionSort] = useState<{
+    key: keyof Session
+    direction: "ascending" | "descending"
+  } | null>(null)
+
+  const sortedSessions = useMemo(() => {
+    if (!sessionSort) return sessions
+    const direction = sessionSort.direction === "ascending" ? 1 : -1
+    return [...sessions].sort((a, b) =>
+      String(a[sessionSort.key]).localeCompare(String(b[sessionSort.key]), undefined, {
+        numeric: true,
+      }) * direction
+    )
+  }, [sessions, sessionSort])
+
+  function sortSessions(key: keyof Session) {
+    setSessionSort((current) => ({
+      key,
+      direction:
+        current?.key === key && current.direction === "ascending"
+          ? "descending"
+          : "ascending",
+    }))
+  }
+
+  function SortHead({ label, sortKey }: { label: string; sortKey: keyof Session }) {
+    const direction = sessionSort?.key === sortKey ? sessionSort.direction : undefined
+    const Icon = direction === "ascending"
+      ? IconSortAscending
+      : direction === "descending"
+        ? IconSortDescending
+        : IconSelector
+    return (
+      <TableHead aria-sort={direction ?? "none"}>
+        <Button variant="ghost" className="-ml-3" onClick={() => sortSessions(sortKey)}>
+          {label}<Icon />
+        </Button>
+      </TableHead>
+    )
+  }
 
   function applyDashboard(dashboard: Dashboard) {
     setStatus(dashboard.status)
@@ -523,19 +566,19 @@ function App() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Project</TableHead>
-                      <TableHead>Start</TableHead>
-                      <TableHead>End</TableHead>
-                      <TableHead>Duration</TableHead>
-                      <TableHead>Page</TableHead>
-                      <TableHead>Activity</TableHead>
+                      <SortHead label="Project" sortKey="project_name" />
+                      <SortHead label="Start" sortKey="started_at_utc" />
+                      <SortHead label="End" sortKey="ended_at_utc" />
+                      <SortHead label="Duration" sortKey="duration_seconds" />
+                      <SortHead label="Page" sortKey="page" />
+                      <SortHead label="Activity" sortKey="activity_category" />
                       <TableHead className="w-12">
                         <span className="sr-only">Edit</span>
                       </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {sessions.map((session) => (
+                    {sortedSessions.map((session) => (
                       <TableRow key={session.id}>
                         <TableCell className="font-medium">
                           {session.project_name}
