@@ -248,6 +248,10 @@ flowchart TD
 
 ## Development and Contributing
 
+Local checkouts also install `Workspace > Scripts > ResolveTimeTrackerDevMenu`.
+It starts the Vite development server and Electron with hot reload; use the normal
+`ResolveTimeTrackerMenu` entry for the built app.
+
 The [Development Guide](docs/development.md) covers prerequisites, repository structure, local startup, API access, tests, linting, and builds. See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
 ## Credits

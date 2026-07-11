@@ -10,6 +10,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MENU_SCRIPT_NAME = "ResolveTimeTrackerMenu.py"
+DEV_MENU_SCRIPT_NAME = "ResolveTimeTrackerDevMenu.py"
 
 
 def default_utility_dir() -> Path:
@@ -44,7 +45,8 @@ def default_utility_dir() -> Path:
     )
 
 
-def launcher_text(repo_root: Path) -> str:
+def launcher_text(repo_root: Path, *, dev: bool = False) -> str:
+    dev_arg = ', "--dev"' if dev else ""
     return f'''"""Generated Resolve Utility launcher for Resolve Time Tracker."""
 
 from __future__ import annotations
@@ -104,7 +106,7 @@ else:
 python = next((candidate for candidate in candidates if candidate.exists() and valid_python(candidate)), None)
 command = None
 if python is not None:
-    command = [str(python), str(REPO_ROOT / "scripts" / "ResolveTimeTracker.py"), "--companion"]
+    command = [str(python), str(REPO_ROOT / "scripts" / "ResolveTimeTracker.py"), "--companion"{dev_arg}]
 else:
     uv = find_uv()
     if uv is None:
@@ -116,6 +118,7 @@ else:
         "3.13",
         "scripts/ResolveTimeTracker.py",
         "--companion",
+        {('"--dev",' if dev else "")}
     ]
 subprocess.Popen(
     command,
@@ -135,6 +138,9 @@ def install_menu_script(
     utility_dir.mkdir(parents=True, exist_ok=True)
     target = utility_dir / MENU_SCRIPT_NAME
     target.write_text(launcher_text(repo_root.resolve()), encoding="utf-8")
+    (utility_dir / DEV_MENU_SCRIPT_NAME).write_text(
+        launcher_text(repo_root.resolve(), dev=True), encoding="utf-8"
+    )
     return target
 
 

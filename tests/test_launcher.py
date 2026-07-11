@@ -88,7 +88,26 @@ class LauncherTest(unittest.TestCase):
         ) as run:
             self.assertEqual(0, main([]))
 
-        run.assert_called_once_with(default_db_path(), background=False)
+        run.assert_called_once_with(default_db_path(), background=False, dev=False)
+
+    def test_development_companion_uses_vite_launcher(self):
+        with (
+            patch("shutil.which", return_value="npm"),
+            patch("subprocess.run") as run,
+            patch("scripts.ResolveTimeTracker._is_windows", return_value=False),
+            patch(
+                "scripts.ResolveTimeTracker._python_has_sidecar_deps",
+                return_value=True,
+            ),
+        ):
+            run.return_value.returncode = 0
+            run_electron_companion(Path("tracker.sqlite3"), dev=True)
+
+        self.assertEqual(["npm", "run", "desktop:dev"], run.call_args.args[0])
+        self.assertEqual(
+            "tracker.sqlite3",
+            run.call_args.kwargs["env"]["RESOLVE_TIME_TRACKER_DB"],
+        )
 
     def test_companion_launches_electron_with_current_python(self):
         with (

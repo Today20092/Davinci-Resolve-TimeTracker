@@ -37,6 +37,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--tracker", action="store_true")
     parser.add_argument("--companion", action="store_true")
     parser.add_argument("--background", action="store_true")
+    parser.add_argument("--dev", action="store_true")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--version", action="store_true")
@@ -48,7 +49,9 @@ def _is_windows() -> bool:
     return os.name == "nt"
 
 
-def run_electron_companion(db_path: Path, *, background: bool = False) -> int:
+def run_electron_companion(
+    db_path: Path, *, background: bool = False, dev: bool = False
+) -> int:
     frontend_dir = REPO_ROOT / "frontend"
     npm = shutil.which("npm.cmd" if _is_windows() else "npm")
     if npm is None:
@@ -60,12 +63,17 @@ def run_electron_companion(db_path: Path, *, background: bool = False) -> int:
         console_python = Path(f"{python_text[:-11]}python.exe")
         if console_python.is_file():
             python = console_python
-    command = [npm, "run", "desktop", "--", "--db", str(db_path)]
+    command = [npm, "run", "desktop:dev" if dev else "desktop"]
+    if dev:
+        env["RESOLVE_TIME_TRACKER_DB"] = str(db_path)
+    else:
+        command.extend(["--", "--db", str(db_path)])
     if background:
         command.append("--background")
     if _python_has_sidecar_deps(python):
-        command.extend(["--python", str(python)])
         env["RESOLVE_TIME_TRACKER_PYTHON"] = str(python)
+        if not dev:
+            command.extend(["--python", str(python)])
     return subprocess.run(
         command,
         cwd=frontend_dir,
@@ -106,7 +114,7 @@ def main(argv: list[str] | None = None) -> int:
 
         run_api(args.db, host=args.host, port=args.port)
         return 0
-    return run_electron_companion(args.db, background=args.background)
+    return run_electron_companion(args.db, background=args.background, dev=args.dev)
 
 
 if __name__ == "__main__":

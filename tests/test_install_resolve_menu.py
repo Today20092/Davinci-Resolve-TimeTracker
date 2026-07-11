@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from scripts.install_resolve_menu import (
+    DEV_MENU_SCRIPT_NAME,
     MENU_SCRIPT_NAME,
     default_utility_dir,
     install_menu_script,
@@ -31,6 +32,16 @@ class InstallResolveMenuTest(unittest.TestCase):
             self.assertIn('"--python"', text)
             self.assertIn('"3.13"', text)
             self.assertIn("Run uv sync --python 3.13", text)
+
+    def test_installs_separate_development_launcher(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            utility_dir = Path(tmp) / "Utility"
+
+            install_menu_script(repo_root=Path(tmp) / "repo", utility_dir=utility_dir)
+
+            target = utility_dir / DEV_MENU_SCRIPT_NAME
+            self.assertTrue(target.is_file())
+            self.assertIn('"--dev"', target.read_text(encoding="utf-8"))
 
     def test_default_utility_dir_uses_linux_resolve_script_folder(self):
         with (

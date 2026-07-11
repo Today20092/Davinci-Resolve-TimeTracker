@@ -38,6 +38,7 @@ class UninstallTest(unittest.TestCase):
             root = Path(tmp)
             source = root / "source"
             menu = root / "ResolveTimeTrackerMenu.py"
+            dev_menu = root / "ResolveTimeTrackerDevMenu.py"
             startup = root / "ResolveTimeTrackerBackground.cmd"
             database = root / "tracker.sqlite3"
             source.mkdir()
@@ -47,6 +48,7 @@ class UninstallTest(unittest.TestCase):
                 "", encoding="utf-8"
             )
             menu.write_text("launcher", encoding="utf-8")
+            dev_menu.write_text("development launcher", encoding="utf-8")
             startup.write_text("startup", encoding="utf-8")
             database.write_text("time", encoding="utf-8")
 
@@ -60,6 +62,7 @@ class UninstallTest(unittest.TestCase):
 
             self.assertFalse(source.exists())
             self.assertFalse(menu.exists())
+            self.assertFalse(dev_menu.exists())
             self.assertFalse(startup.exists())
             self.assertTrue(database.exists())
 

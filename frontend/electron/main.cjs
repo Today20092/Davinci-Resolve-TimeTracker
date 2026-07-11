@@ -97,7 +97,7 @@ function hasArg(name) {
 }
 
 function startSidecar() {
-  const db = readArg("--db")
+  const db = readArg("--db") || process.env.RESOLVE_TIME_TRACKER_DB
   const python = readArg("--python") || process.env.RESOLVE_TIME_TRACKER_PYTHON
   const command = python || "uv"
   const args = python

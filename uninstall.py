@@ -12,6 +12,7 @@ from pathlib import Path
 
 
 MENU_SCRIPT_NAME = "ResolveTimeTrackerMenu.py"
+DEV_MENU_SCRIPT_NAME = "ResolveTimeTrackerDevMenu.py"
 STARTUP_SCRIPT_NAME = "ResolveTimeTrackerBackground.cmd"
 
 
@@ -100,6 +101,7 @@ def remove_installation(
             f"Refusing to remove {source_dir}: not a Resolve Time Tracker checkout"
         )
     menu_script.unlink(missing_ok=True)
+    menu_script.with_name(DEV_MENU_SCRIPT_NAME).unlink(missing_ok=True)
     startup_script.unlink(missing_ok=True)
     if source_dir.is_dir():
         shutil.rmtree(source_dir)
