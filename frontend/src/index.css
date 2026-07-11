@@ -152,7 +152,17 @@
   .export-report {
     position: absolute;
     inset: 0;
-    color: black;
+    width: 100%;
+    color: var(--foreground);
+  }
+
+  .export-report > :last-child {
+    border: 0;
+    padding: 0;
+  }
+
+  .export-report .recharts-responsive-container {
+    break-inside: avoid;
   }
 
   .no-print {
