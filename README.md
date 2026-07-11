@@ -142,41 +142,41 @@ How Resolve, the desktop companion, the local Python sidecar, and local storage 
 
 ```mermaid
 flowchart LR
-  User["Editor"] --> Menu["Resolve Scripts menu<br/>ResolveTimeTrackerMenu.py"]
-  Menu --> Entry["scripts/ResolveTimeTracker.py<br/>--companion"]
+  User["Editor"] -->|manual start| Menu["Resolve Scripts menu"]
+  Login["Windows sign-in"] -.->|optional automatic start| Launcher["Python launcher<br/>scripts/ResolveTimeTracker.py"]
+  Menu --> Launcher
 
-  subgraph Desktop["Desktop companion"]
-    Electron["Electron shell<br/>frontend/electron/main.cjs"]
-    React["React dashboard<br/>Vite + shadcn/ui"]
+  subgraph Desktop["Electron process"]
+    Electron["Main process<br/>window, tray, lifecycle"]
+    Preload["Preload bridge<br/>PDF save dialog only"]
+    React["Renderer<br/>React + Vite + shadcn/ui"]
+    Electron --> Preload --> React
   end
 
-  subgraph Backend["Local Python sidecar"]
-    Sidecar["FastAPI localhost API"]
-    Engine["TrackingEngine<br/>billable Session rules"]
-    Bridge["ResolveBridge<br/>project, page, render state"]
-    Activity["Activity probe<br/>idle + foreground checks"]
+  subgraph Python["Python sidecar process"]
+    Api["FastAPI on 127.0.0.1<br/>commands + dashboard read model"]
+    Engine["TrackingEngine<br/>session and heartbeat rules"]
+    Bridge["ResolveBridge<br/>Resolve + OS activity snapshot"]
+    Store["SQLiteStore<br/>single owner of local data"]
+    Export["CSV + headless PDF exporters"]
+    Api --> Engine --> Bridge
+    Api --> Store
+    Engine --> Store
+    Api --> Export --> Store
   end
 
-  subgraph Resolve["DaVinci Resolve Studio"]
-    ResolveApi["Resolve scripting API"]
-  end
+  Resolve["DaVinci Resolve Studio<br/>external application"] <-->|local scripting API| Bridge
+  Os["Operating system<br/>foreground + idle signals"] --> Bridge
+  Db[("tracker.sqlite3<br/>projects, sessions, settings")] <-->|local file| Store
 
-  subgraph Data["Local data"]
-    Store["SQLiteStore<br/>projects, sessions, settings"]
-    Csv["CSV export"]
-  end
+  Launcher --> Electron
+  Electron -->|starts if no compatible API exists| Api
+  React <-->|localhost REST| Api
+  Api -.->|SSE invalidation every 5s| React
+  Electron -.->|health check + restart| Api
+  React -->|desktop PDF: print visible report| Preload
 
-  Entry --> Electron
-  Electron --> Sidecar
-  Electron --> React
-  React <-->|REST + server-sent events| Sidecar
-  Sidecar --> Engine
-  Engine --> Bridge
-  Bridge --> ResolveApi
-  Engine --> Activity
-  Engine --> Store
-  React --> Csv
-  Csv --> Store
+  Note["Closing the window does not stop tracking.<br/>The tray keeps Electron and Python running;<br/>Quit stops both."] -.-> Electron
 
   classDef user fill:#fff7ed,stroke:#f97316,color:#7c2d12
   classDef resolve fill:#eff6ff,stroke:#2563eb,color:#1e3a8a
@@ -185,10 +185,10 @@ flowchart LR
   classDef data fill:#fdf2f8,stroke:#db2777,color:#831843
 
   class User user
-  class Menu,Entry,ResolveApi resolve
-  class Electron,React desktop
-  class Sidecar,Engine,Bridge,Activity backend
-  class Store,Csv data
+  class Menu,Launcher,Resolve resolve
+  class Electron,Preload,React desktop
+  class Api,Engine,Bridge,Export backend
+  class Store,Db data
 ```
 
 ### Install Flow
@@ -197,13 +197,17 @@ What the one-file installer prepares before the menu item appears inside DaVinci
 
 ```mermaid
 flowchart TD
-  Install["install.ps1 / install.sh"] --> Installer["install.py"]
-  Installer --> Source["Find or clone source checkout"]
-  Installer --> Python["uv sync --python 3.13"]
-  Installer --> Frontend["npm ci + npm run build"]
-  Installer --> MenuInstall["scripts/install_resolve_menu.py"]
-  MenuInstall --> Launcher["Resolve Scripts/Utility<br/>ResolveTimeTrackerMenu.py"]
-  Launcher --> Companion["Launch tracker companion"]
+  Install["Run install.ps1 or install.sh"] --> Installer["install.py"]
+  Installer --> Source["Find, clone, or update source checkout"]
+  Source --> Python["uv sync<br/>Python 3.13 environment"]
+  Source --> Frontend["npm ci + npm run build<br/>Electron / React assets"]
+  Python --> MenuInstall["Install ResolveTimeTrackerMenu.py"]
+  Frontend --> MenuInstall
+  MenuInstall --> Menu["Always available:<br/>Workspace > Scripts menu start"]
+  MenuInstall --> Choice{"Start automatically?<br/>Windows only"}
+  Choice -->|No, default| Off["Nothing runs after sign-in<br/>until the menu item is used"]
+  Choice -->|Yes| Startup["Add hidden launcher to<br/>Windows Startup folder"]
+  Startup --> Background["At sign-in: Electron tray +<br/>Python sidecar run in background"]
 
   classDef bootstrap fill:#fff7ed,stroke:#f97316,color:#7c2d12
   classDef setup fill:#eef2ff,stroke:#4f46e5,color:#312e81
@@ -211,15 +215,15 @@ flowchart TD
 
   class Install,Installer bootstrap
   class Source,Python,Frontend setup
-  class MenuInstall,Launcher,Companion resolve
+  class MenuInstall,Menu,Choice,Off,Startup,Background resolve
 ```
 
 | Area | Files | Responsibility |
 | --- | --- | --- |
-| Plugin entry | `scripts/ResolveTimeTracker.py` | Launches the Electron companion by default, or the FastAPI sidecar when requested. |
+| Plugin entry | `scripts/ResolveTimeTracker.py` | Launches Electron by default, or runs the FastAPI sidecar when Electron requests `--api`. |
 | Install path | `install.py`, `install.ps1`, `install.sh`, `scripts/install_resolve_menu.py` | Prepares Python and frontend dependencies, then installs the Resolve Scripts-menu launcher. |
-| Interface | `frontend/` | Electron opens the desktop window; React, Vite, Tailwind, and shadcn/ui render status, history, settings, edits, and CSV export. |
-| Backend API | `src/resolve_time_tracker/api.py` | FastAPI exposes localhost REST endpoints and server-sent live status events. |
+| Interface | `frontend/` | Electron owns the window, tray, sidecar lifecycle, and desktop PDF printing; React, Vite, Tailwind, and shadcn/ui render the dashboard. |
+| Backend API | `src/resolve_time_tracker/api.py` | FastAPI exposes localhost commands, exports, server-sent invalidations, and the complete dashboard read model consumed by React. |
 | Tracking rules | `src/resolve_time_tracker/tracking_engine.py` | Converts Resolve/runtime snapshots into billable Sessions with heartbeats. |
 | Resolve adapter | `src/resolve_time_tracker/resolve_bridge.py` | Reads project, Page, render, timeline, idle, and foreground state. |
 | Storage | `src/resolve_time_tracker/database.py` | Stores Projects, active Session, closed Sessions, settings, heartbeat recovery, summaries, and CSV output in SQLite. |
