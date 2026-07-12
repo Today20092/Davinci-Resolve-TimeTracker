@@ -116,6 +116,11 @@ CSV export writes closed sessions only. Open active sessions are exported after 
 
 These screenshots use sample project data to show the companion app pages.
 
+<details>
+<summary>View app screenshots</summary>
+
+<br>
+
 ### Dashboard
 
 <img src="docs/screenshots/dashboard.png" alt="Dashboard showing current Resolve project, tracked time, page chart, and recent activity" width="720">
@@ -135,6 +140,8 @@ These screenshots use sample project data to show the companion app pages.
 ### Settings
 
 <img src="docs/screenshots/settings.png" alt="Settings page showing idle timeout and theme controls" width="720">
+
+</details>
 
 ## How Tracking Works
 
@@ -166,6 +173,11 @@ More detail lives in [docs/platform-support.md](docs/platform-support.md).
 See [Troubleshooting](docs/troubleshooting.md) when the Resolve menu item is missing, the tracker is disconnected, or time is not increasing.
 
 ## Architecture
+
+<details>
+<summary>View architecture diagrams and component map</summary>
+
+<br>
 
 ### Diagram Key
 
@@ -253,6 +265,8 @@ flowchart TD
 | Tracking rules | `src/resolve_time_tracker/tracking_engine.py` | Converts Resolve/runtime snapshots into billable Sessions with heartbeats. |
 | Resolve adapter | `src/resolve_time_tracker/resolve_bridge.py` | Reads project, Page, render, timeline, idle, and foreground state. |
 | Storage | `src/resolve_time_tracker/database.py` | Stores Projects, active Session, closed Sessions, settings, heartbeat recovery, summaries, and CSV output in SQLite. |
+
+</details>
 
 ## Development and Contributing
 
