@@ -200,11 +200,10 @@ function fetchStatus(timeoutMs = 1000) {
   })
 }
 
-function trayIcon(color) {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><circle cx="8" cy="8" r="7" fill="${color}"/></svg>`
-  return nativeImage.createFromDataURL(
-    `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`
-  )
+function trayIcon() {
+  const icon = nativeImage.createFromPath(appIcon).resize({ width: 16, height: 16 })
+  if (icon.isEmpty()) throw new Error(`Unable to load tray icon: ${appIcon}`)
+  return icon
 }
 
 async function updateTray() {
@@ -215,7 +214,7 @@ async function updateTray() {
     scheduleSidecarRestart()
   }
   const presentation = trayPresentation(status)
-  tray.setImage(trayIcon(presentation.color))
+  tray.setImage(trayIcon())
   tray.setToolTip(presentation.tooltip)
   tray.setContextMenu(
     Menu.buildFromTemplate([
@@ -237,7 +236,7 @@ function showWindow() {
 }
 
 function createTray() {
-  tray = new Tray(trayIcon("#ef4444"))
+  tray = new Tray(trayIcon())
   tray.on("click", showWindow)
   void updateTray()
   trayTimer = setInterval(updateTray, 5000)
