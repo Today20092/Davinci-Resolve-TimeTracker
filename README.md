@@ -13,6 +13,8 @@
 
 Resolve Time Tracker is an MIT-licensed, open-source time tracker for DaVinci Resolve Studio. It tracks billable editing time per Resolve project while avoiding the classic mistake: counting time after the editor has walked away.
 
+<img src="docs/screenshots/dashboard.png" alt="Resolve Time Tracker dashboard showing the current Resolve project, tracked time, page activity chart, and recent sessions" width="900">
+
 ## Requirements
 
 - DaVinci Resolve Studio. The latest Resolve Studio release is the actively tested target; Windows with Resolve Studio 21 is currently verified.
@@ -120,10 +122,6 @@ These screenshots use sample project data to show the companion app pages.
 <summary>View app screenshots</summary>
 
 <br>
-
-### Dashboard
-
-<img src="docs/screenshots/dashboard.png" alt="Dashboard showing current Resolve project, tracked time, page chart, and recent activity" width="720">
 
 ### Projects
 
