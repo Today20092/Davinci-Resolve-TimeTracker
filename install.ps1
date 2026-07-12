@@ -67,7 +67,7 @@ if (-not $uv) {
 }
 
 $env:RESOLVE_TIME_TRACKER_UV = $uv
-$installPy = Join-Path $PSScriptRoot "install.py"
+$installPy = if ($PSScriptRoot) { Join-Path $PSScriptRoot "install.py" } else { $null }
 if (-not (Test-Path $installPy)) {
     $installPy = Join-Path ([System.IO.Path]::GetTempPath()) "resolve-time-tracker-install.py"
     Write-Host "[bootstrap] Downloading installer: $InstallPyUrl"

@@ -247,6 +247,11 @@ class BootstrapInstallTest(unittest.TestCase):
         self.assertIn("Would you like to close this window? [y/N]", text)
         self.assertIn("Wait-ToClose", text)
 
+    def test_windows_installer_supports_piped_execution(self):
+        text = (Path(__file__).resolve().parents[1] / "install.ps1").read_text()
+
+        self.assertIn("if ($PSScriptRoot)", text)
+
 
 if __name__ == "__main__":
     unittest.main()

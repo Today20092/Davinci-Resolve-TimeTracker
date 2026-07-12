@@ -35,6 +35,14 @@ Workspace > Scripts > ResolveTimeTrackerMenu
 | macOS | [install.sh](https://raw.githubusercontent.com/Today20092/Davinci-Resolve-TimeTracker/main/install.sh) | `sh ~/Downloads/install.sh` |
 | Linux | [install.sh](https://raw.githubusercontent.com/Today20092/Davinci-Resolve-TimeTracker/main/install.sh) | `sh ~/Downloads/install.sh` |
 
+Windows users who prefer a one-command install can run:
+
+```powershell
+irm https://raw.githubusercontent.com/Today20092/Davinci-Resolve-TimeTracker/main/install.ps1 | iex
+```
+
+This downloads and immediately runs the installer. Use the download link above instead if you want to inspect the script before running it.
+
 If Windows blocks `install.ps1`, open PowerShell in your Downloads folder and run:
 
 ```powershell
