@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import threading
 import time
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timezone
 from io import StringIO
 from pathlib import Path
 from typing import Any, Callable, Iterator
@@ -17,6 +17,10 @@ from pydantic import BaseModel
 
 from resolve_time_tracker.database import SQLiteStore
 from resolve_time_tracker.pdf_export import PdfExportOptions, build_project_pdf
+from resolve_time_tracker.report_projection import (
+    parse_utc as _parse_utc,
+    project_report,
+)
 from resolve_time_tracker.tracking_engine import TrackingEngine
 
 
@@ -153,22 +157,30 @@ class ApiState:
     def pdf(self, request: PdfExportRequest) -> bytes:
         with self.lock:
             sessions = [self._session(row) for row in self.store.sessions()]
-        if not any(
-            session["project_name"] == request.project_name for session in sessions
-        ):
+            active = self.store.active_session_summary()
+            status = self._status_unlocked()
+            generated = self.now()
+        report = project_report(
+            request.project_name,
+            sessions,
+            active_session=active,
+            active_seconds=status["active_elapsed_seconds"],
+            now=generated,
+        )
+        if not report.sessions and report.session_count == 0:
             raise HTTPException(
                 status_code=404, detail=f"Project {request.project_name} not found"
             )
         return build_project_pdf(
             project_name=request.project_name,
-            sessions=sessions,
+            report=report,
             options=PdfExportOptions(
                 show_totals=request.show_totals,
                 show_page_chart=request.show_page_chart,
                 show_activity_chart=request.show_activity_chart,
                 show_recent_activity=request.show_recent_activity,
             ),
-            generated_at=self.now(),
+            generated_at=generated,
         )
 
     def events(self, *, once: bool, poll_interval_seconds: float) -> Iterator[str]:
@@ -269,40 +281,16 @@ class ApiState:
         if project == "none":
             return None, None
 
-        project_sessions = [
-            session for session in sessions if session["project_name"] == project
-        ]
-        activity_totals = {"editing": 0, "playback": 0, "rendering": 0}
-        page_totals: dict[str, int] = {}
-        today = self.now().astimezone().date()
-        today_seconds = 0
-        for session in project_sessions:
-            seconds = session["duration_seconds"]
-            activity_totals[session["activity_category"]] += seconds
-            page = _display_page(session["page"], session["activity_category"])
-            page_totals[page] = page_totals.get(page, 0) + seconds
-            today_seconds += _seconds_on_local_date(
-                _parse_utc(session["started_at_utc"]),
-                _parse_utc(session["ended_at_utc"]),
-                today,
-            )
-
         active = self.store.active_session_summary()
-        active_seconds = status["active_elapsed_seconds"]
-        if active is not None:
-            category = active["activity_category"]
-            activity_totals[category] += active_seconds
-            page = _display_page(active["page"], category)
-            page_totals[page] = page_totals.get(page, 0) + active_seconds
-            today_seconds += _seconds_on_local_date(
-                _parse_utc(active["started_at_utc"]), self.now(), today
-            )
-
-        recent = sorted(
-            project_sessions,
-            key=lambda session: session["started_at_utc"],
-            reverse=True,
-        )[:5]
+        generated = self.now()
+        report = project_report(
+            project,
+            sessions,
+            active_session=active,
+            active_seconds=status["active_elapsed_seconds"],
+            now=generated,
+        )
+        recent = report.recent_sessions[:5]
         last_activity = (
             status["heartbeat"]
             if status["tracking_status"] == "active"
@@ -310,38 +298,25 @@ class ApiState:
             if recent
             else "none"
         )
-        tracked_seconds = sum(activity_totals.values())
         current_project = {
             "project": project,
             "totals": {
-                "tracked_seconds": tracked_seconds,
-                "today_seconds": today_seconds,
-                "session_count": len(project_sessions)
-                + (1 if active is not None else 0),
+                "tracked_seconds": report.tracked_seconds,
+                "today_seconds": report.today_seconds,
+                "session_count": report.session_count,
             },
-            "activity_totals": activity_totals,
+            "activity_totals": report.activity_totals,
             "page_totals": [
                 {"page": page, "seconds": seconds}
-                for page, seconds in sorted(
-                    page_totals.items(), key=lambda item: item[1], reverse=True
-                )
+                for page, seconds in report.page_totals
             ],
             "recent_sessions": recent,
             "last_activity": last_activity,
         }
-        dates = sorted(
-            _parse_utc(value).astimezone().date()
-            for session in project_sessions
-            for value in (session["started_at_utc"], session["ended_at_utc"])
-        )
         export_preview = {
             "project": project,
-            "generated_at": today.strftime("%m/%d/%Y"),
-            "date_range": (
-                f"{dates[0]:%m/%d/%Y} - {dates[-1]:%m/%d/%Y}"
-                if dates
-                else "Live project time"
-            ),
+            "generated_at": generated.astimezone().date().strftime("%m/%d/%Y"),
+            "date_range": report.date_range,
         }
         return current_project, export_preview
 
@@ -465,13 +440,6 @@ def _sse(event: str, data: dict[str, Any]) -> str:
     return f"event: {event}\ndata: {payload}\n\n"
 
 
-def _parse_utc(value: str) -> datetime:
-    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
-
-
 def _session_duration(row: Any) -> int:
     started = _parse_utc(row["started_at_utc"])
     ended = _parse_utc(row["ended_at_utc"])
@@ -489,18 +457,3 @@ def _safe_filename(value: str) -> str:
         char if char.isalnum() or char in {"-", "_", "."} else "-" for char in value
     ).strip("-")
     return filename or "resolve-project"
-
-
-def _display_page(page: str, category: str) -> str:
-    if category == "rendering" and page in {"", "Unknown", "none"}:
-        return "Render/Export"
-    return page or "Unknown"
-
-
-def _seconds_on_local_date(started: datetime, ended: datetime, day: date) -> int:
-    next_day = day + timedelta(days=1)
-    start_of_day = datetime.fromtimestamp(time.mktime(day.timetuple()), timezone.utc)
-    end_of_day = datetime.fromtimestamp(time.mktime(next_day.timetuple()), timezone.utc)
-    overlap_start = max(started.astimezone(timezone.utc), start_of_day)
-    overlap_end = min(ended.astimezone(timezone.utc), end_of_day)
-    return max(0, int((overlap_end - overlap_start).total_seconds()))

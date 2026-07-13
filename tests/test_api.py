@@ -6,8 +6,9 @@ from unittest.mock import Mock, patch
 
 from fastapi.testclient import TestClient
 
-from resolve_time_tracker.api import _seconds_on_local_date, create_app, run_api
+from resolve_time_tracker.api import create_app, run_api
 from resolve_time_tracker.database import SQLiteStore
+from resolve_time_tracker.report_projection import seconds_on_local_date
 from resolve_time_tracker.tracking_engine import RuntimeSnapshot, TrackingEngine
 
 
@@ -29,13 +30,13 @@ class ApiTest(unittest.TestCase):
     def test_local_day_uses_dst_aware_midnight_boundaries(self):
         spring_forward = datetime(2026, 3, 8).date()
         with patch(
-            "resolve_time_tracker.api.time.mktime",
+            "resolve_time_tracker.report_projection.time.mktime",
             side_effect=[
                 datetime(2026, 3, 8, 5, tzinfo=timezone.utc).timestamp(),
                 datetime(2026, 3, 9, 4, tzinfo=timezone.utc).timestamp(),
             ],
         ):
-            seconds = _seconds_on_local_date(
+            seconds = seconds_on_local_date(
                 datetime(2026, 3, 8, tzinfo=timezone.utc),
                 datetime(2026, 3, 10, tzinfo=timezone.utc),
                 spring_forward,

@@ -21,6 +21,8 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from resolve_time_tracker.report_projection import ProjectReport
+
 
 @dataclass(frozen=True)
 class PdfExportOptions:
@@ -33,16 +35,11 @@ class PdfExportOptions:
 def build_project_pdf(
     *,
     project_name: str,
-    sessions: list[dict[str, Any]],
+    report: ProjectReport,
     options: PdfExportOptions,
     generated_at: datetime | None = None,
 ) -> bytes:
     generated = generated_at or datetime.now(timezone.utc)
-    project_sessions = [
-        session for session in sessions if session["project_name"] == project_name
-    ]
-    totals = _totals(project_sessions)
-
     output = BytesIO()
     doc = SimpleDocTemplate(
         output,
@@ -58,7 +55,7 @@ def build_project_pdf(
         Paragraph("Resolve Time Report", styles["BodyText"]),
         Paragraph(project_name, styles["Title"]),
         Paragraph(
-            f"Generated {generated.date().isoformat()} | {_date_range(project_sessions)}",
+            f"Generated {generated.date().isoformat()} | {report.date_range}",
             styles["BodyText"],
         ),
         Spacer(1, 0.2 * inch),
@@ -70,10 +67,10 @@ def build_project_pdf(
                 _section("Summary", styles),
                 _table(
                     [
-                        ["Total tracked", _duration(totals["tracked"])],
-                        ["Editing", _duration(totals["editing"])],
-                        ["Rendering", _duration(totals["rendering"])],
-                        ["Tracked sessions", str(len(project_sessions))],
+                        ["Total tracked", _duration(report.tracked_seconds)],
+                        ["Editing", _duration(report.activity_totals["editing"])],
+                        ["Rendering", _duration(report.activity_totals["rendering"])],
+                        ["Tracked sessions", str(report.session_count)],
                     ],
                     widths=[2.2 * inch, 4.1 * inch],
                 ),
@@ -85,7 +82,7 @@ def build_project_pdf(
         story.extend(
             [
                 _section("Time by page", styles),
-                _bar_table(_group_seconds(project_sessions, "page")),
+                _bar_table(report.page_totals),
                 Spacer(1, 0.18 * inch),
             ]
         )
@@ -94,18 +91,24 @@ def build_project_pdf(
         story.extend(
             [
                 _section("Activity mix", styles),
-                _bar_table(_group_seconds(project_sessions, "activity_category")),
+                _bar_table(
+                    sorted(
+                        (
+                            item
+                            for item in report.activity_totals.items()
+                            if item[1] > 0
+                        ),
+                        key=lambda item: item[1],
+                        reverse=True,
+                    )
+                ),
                 Spacer(1, 0.18 * inch),
             ]
         )
 
     if options.show_recent_activity:
         rows = [["Start", "Duration", "Page", "Activity"]]
-        for session in sorted(
-            project_sessions,
-            key=lambda item: item["started_at_utc"],
-            reverse=True,
-        )[:8]:
+        for session in report.recent_sessions[:8]:
             rows.append(
                 [
                     _short_datetime(session["started_at_utc"]),
@@ -118,24 +121,6 @@ def build_project_pdf(
 
     doc.build(story)
     return output.getvalue()
-
-
-def _totals(sessions: list[dict[str, Any]]) -> dict[str, int]:
-    totals = {"tracked": 0, "editing": 0, "rendering": 0}
-    for session in sessions:
-        seconds = int(session["duration_seconds"])
-        totals["tracked"] += seconds
-        if session["activity_category"] in totals:
-            totals[session["activity_category"]] += seconds
-    return totals
-
-
-def _group_seconds(sessions: list[dict[str, Any]], key: str) -> list[tuple[str, int]]:
-    totals: dict[str, int] = {}
-    for session in sessions:
-        label = session[key] or "Unknown"
-        totals[label] = totals.get(label, 0) + int(session["duration_seconds"])
-    return sorted(totals.items(), key=lambda item: item[1], reverse=True)
 
 
 def _bar_table(rows: list[tuple[str, int]]) -> Table:
@@ -194,18 +179,6 @@ def _table(rows: list[list[str]], widths: list[float] | None = None) -> Table:
 
 def _section(title: str, styles: Any) -> Paragraph:
     return Paragraph(title, styles["Heading2"])
-
-
-def _date_range(sessions: list[dict[str, Any]]) -> str:
-    starts = sorted(session["started_at_utc"] for session in sessions)
-    ends = sorted(session["ended_at_utc"] for session in sessions)
-    if not starts or not ends:
-        return "Live project time"
-    return f"{_short_date(starts[0])} - {_short_date(ends[-1])}"
-
-
-def _short_date(value: str) -> str:
-    return _parse_utc(value).date().isoformat()
 
 
 def _short_datetime(value: str) -> str:
