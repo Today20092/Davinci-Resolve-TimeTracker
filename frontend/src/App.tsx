@@ -501,13 +501,7 @@ function App() {
                           margin={{ left: 0, right: 56 }}
                         >
                           <XAxis dataKey="seconds" hide type="number" />
-                          <YAxis
-                            dataKey="page"
-                            axisLine={false}
-                            tickLine={false}
-                            type="category"
-                            width={96}
-                          />
+                          <PageAxis />
                           <ChartTooltip
                             content={
                               <ChartTooltipContent
@@ -858,13 +852,7 @@ function App() {
                                   margin={{ left: 0, right: 56 }}
                                 >
                                   <XAxis dataKey="seconds" hide type="number" />
-                                  <YAxis
-                                    dataKey="page"
-                                    axisLine={false}
-                                    tickLine={false}
-                                    type="category"
-                                    width={72}
-                                  />
+                                  <PageAxis />
                                   <Bar
                                     dataKey="seconds"
                                     fill="var(--color-seconds)"
@@ -1329,6 +1317,18 @@ function ActivityTable({ sessions }: { sessions: Session[] }) {
         {sessions.length === 0 && <EmptyRow columns={4} />}
       </TableBody>
     </Table>
+  )
+}
+
+function PageAxis() {
+  return (
+    <YAxis
+      dataKey="page"
+      axisLine={false}
+      tickLine={false}
+      type="category"
+      width="auto"
+    />
   )
 }
 

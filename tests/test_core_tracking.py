@@ -65,12 +65,11 @@ class CoreTrackingTest(unittest.TestCase):
 
         self.assertEqual(
             [
-                ("Project A", "Unknown", "editing", 9 * 3600, 9 * 3600 + 5 * 60),
                 (
                     "Project A",
                     "edit",
                     "editing",
-                    9 * 3600 + 5 * 60,
+                    9 * 3600,
                     9 * 3600 + 30 * 60,
                 ),
                 (
@@ -119,6 +118,128 @@ class CoreTrackingTest(unittest.TestCase):
                 )
                 for row in rows
             ],
+        )
+
+    def test_missing_page_reads_keep_one_last_known_page_session(self):
+        snapshots = [
+            RuntimeSnapshot("Project A", None, False, 0, True),
+            RuntimeSnapshot("Project A", "edit", False, 0, True),
+            RuntimeSnapshot("Project A", None, False, 0, True),
+            RuntimeSnapshot("Project A", "edit", False, 0, True),
+        ]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with SQLiteStore(Path(tmp) / "tracker.sqlite3") as store:
+                engine = TrackingEngine(
+                    store, snapshot_provider=SequenceSnapshotProvider(snapshots)
+                )
+                engine.poll(utc(9))
+                engine.poll(utc(9, 1))
+                engine.poll(utc(9, 2))
+                engine.poll(utc(9, 3))
+                engine.close(utc(9, 4))
+                rows = store.sessions()
+
+        self.assertEqual(
+            [("edit", 9 * 3600, 9 * 3600 + 4 * 60)],
+            [
+                (
+                    row["page"],
+                    _seconds(row["started_at_utc"]),
+                    _seconds(row["ended_at_utc"]),
+                )
+                for row in rows
+            ],
+        )
+
+    def test_store_repairs_historical_startup_unknown_page(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "tracker.sqlite3"
+            with SQLiteStore(path) as store:
+                project_id = store.upsert_project("Project A")
+                store.open_active_session(
+                    project_id=project_id,
+                    started_at=utc(9),
+                    page="Unknown",
+                    activity_category="editing",
+                )
+                store.close_active_session(utc(9, 1))
+                store.open_active_session(
+                    project_id=project_id,
+                    started_at=utc(9, 1),
+                    page="edit",
+                    activity_category="editing",
+                )
+                store.close_active_session(utc(9, 2))
+
+            with SQLiteStore(path) as store:
+                self.assertEqual(
+                    ["edit", "edit"], [row["page"] for row in store.sessions()]
+                )
+
+    def test_blank_page_when_rendering_does_not_inherit_edit_page(self):
+        snapshots = [
+            RuntimeSnapshot("Project A", "edit", False, 0, True),
+            RuntimeSnapshot("Project A", None, True, 0, True),
+        ]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with SQLiteStore(Path(tmp) / "tracker.sqlite3") as store:
+                engine = TrackingEngine(
+                    store, snapshot_provider=SequenceSnapshotProvider(snapshots)
+                )
+                engine.poll(utc(9))
+                engine.poll(utc(9, 1))
+                engine.close(utc(9, 2))
+                rows = store.sessions()
+
+        self.assertEqual(
+            [("edit", "editing"), ("Unknown", "rendering")],
+            [(row["page"], row["activity_category"]) for row in rows],
+        )
+
+    def test_project_and_page_transition_does_not_create_boundary_session(self):
+        snapshots = [
+            RuntimeSnapshot("Project A", "edit", False, 0, True),
+            RuntimeSnapshot("Project B", None, False, 0, True),
+            RuntimeSnapshot("Project B", "edit", False, 0, True),
+        ]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with SQLiteStore(Path(tmp) / "tracker.sqlite3") as store:
+                engine = TrackingEngine(
+                    store, snapshot_provider=SequenceSnapshotProvider(snapshots)
+                )
+                engine.poll(utc(9))
+                engine.poll(utc(9, 1))
+                engine.poll(utc(9, 2))
+                engine.close(utc(9, 3))
+                rows = store.sessions()
+
+        self.assertEqual(
+            [("Project A", "edit"), ("Project B", "edit")],
+            [(row["project_name"], row["page"]) for row in rows],
+        )
+
+    def test_focus_and_project_transition_does_not_create_boundary_session(self):
+        snapshots = [
+            RuntimeSnapshot("Project A", "edit", False, 0, False),
+            RuntimeSnapshot("Project B", "edit", False, 0, True),
+        ]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with SQLiteStore(Path(tmp) / "tracker.sqlite3") as store:
+                engine = TrackingEngine(
+                    store, snapshot_provider=SequenceSnapshotProvider(snapshots)
+                )
+                engine.poll(utc(9))
+                engine.poll(utc(9, 1))
+                engine.close(utc(9, 2))
+                rows = store.sessions()
+
+        self.assertEqual(
+            [("Project B", "edit")],
+            [(row["project_name"], row["page"]) for row in rows],
         )
 
     def test_engine_startup_recovers_at_the_last_heartbeat(self):

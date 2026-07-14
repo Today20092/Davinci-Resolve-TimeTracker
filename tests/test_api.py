@@ -239,10 +239,14 @@ class ApiTest(unittest.TestCase):
                         ]
                     ),
                 )
-                app = create_app(store, tracking_engine=tracker, now=lambda: utc(9))
+                current_time = [utc(9)]
+                app = create_app(
+                    store, tracking_engine=tracker, now=lambda: current_time[0]
+                )
                 client = TestClient(app)
 
                 refreshed = client.post("/refresh").json()
+                current_time[0] = utc(9, 1)
                 paused = client.post("/tracking/pause").json()
                 resumed = client.post("/tracking/resume").json()
                 settings = client.post(

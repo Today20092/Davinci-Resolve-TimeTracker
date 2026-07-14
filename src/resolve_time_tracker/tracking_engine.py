@@ -77,27 +77,40 @@ class TrackingEngine:
                     self._close(observed_at)
                 self._has_focus = False
 
-        if previous is None or snapshot.page != previous.page:
-            was_billable = self._is_billable()
-            if was_billable:
-                self._close(observed_at)
-            self._page = snapshot.page or "Unknown"
-            if was_billable:
-                self._open(observed_at)
+        same_project = (
+            previous is not None and snapshot.project_name == previous.project_name
+        )
+        if snapshot.page:
+            page = snapshot.page
+        elif snapshot.is_rendering or not same_project:
+            page = "Unknown"
+        else:
+            page = self._page
+        project_changed = previous is None or not same_project
+        page_changed = page != self._page
+        rendering_changed = snapshot.is_rendering != self._is_rendering
+        backfill_unknown = (
+            page_changed
+            and not project_changed
+            and not rendering_changed
+            and self._page == "Unknown"
+            and page != "Unknown"
+            and self._store.active_session() is not None
+        )
 
-        if previous is None or snapshot.project_name != previous.project_name:
+        if backfill_unknown:
+            self._store.update_active_session_page(page)
+            self._page = page
+        elif project_changed or page_changed or rendering_changed:
             self._close(observed_at)
-            if snapshot.project_name:
-                self._project_id = self._store.upsert_project(snapshot.project_name)
-                self._open_if_billable(observed_at)
-            else:
-                self._project_id = None
-
-        if previous is None or snapshot.is_rendering != previous.is_rendering:
-            if snapshot.is_rendering != self._is_rendering:
-                self._close(observed_at)
-                self._is_rendering = snapshot.is_rendering
-                self._open_if_billable(observed_at)
+            self._page = page
+            if project_changed:
+                if snapshot.project_name:
+                    self._project_id = self._store.upsert_project(snapshot.project_name)
+                else:
+                    self._project_id = None
+            self._is_rendering = snapshot.is_rendering
+            self._open_if_billable(observed_at)
 
         if self._store.active_session() is not None:
             self._store.update_heartbeat(observed_at)
