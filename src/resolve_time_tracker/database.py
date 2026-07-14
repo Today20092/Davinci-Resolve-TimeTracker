@@ -66,8 +66,10 @@ class SQLiteStore:
 
         ended = _format_utc(ended_at)
         started = active["started_at_utc"]
-        if ended < started:
-            ended = started
+        if ended <= started:
+            with self._connection:
+                self._connection.execute("DELETE FROM active_session WHERE id = 1")
+            return
 
         with self._connection:
             self._connection.execute(
@@ -117,6 +119,12 @@ class SQLiteStore:
         return self._connection.execute(
             "SELECT * FROM active_session WHERE id = 1",
         ).fetchone()
+
+    def update_active_session_page(self, page: str) -> None:
+        with self._connection:
+            self._connection.execute(
+                "UPDATE active_session SET page = ? WHERE id = 1", (page,)
+            )
 
     def sessions(self) -> list[sqlite3.Row]:
         return list(
@@ -292,6 +300,22 @@ class SQLiteStore:
                 );
 
                 INSERT OR IGNORE INTO settings(id, idle_timeout_seconds) VALUES (1, 300);
+                """
+            )
+            self._connection.execute(
+                """
+                UPDATE sessions
+                SET page = COALESCE((
+                  SELECT next.page
+                  FROM sessions AS next
+                  WHERE next.project_id = sessions.project_id
+                    AND next.started_at_utc = sessions.ended_at_utc
+                    AND next.activity_category = sessions.activity_category
+                    AND next.page != 'Unknown'
+                  ORDER BY next.id
+                  LIMIT 1
+                ), page)
+                WHERE page = 'Unknown' AND activity_category = 'editing'
                 """
             )
 
