@@ -134,10 +134,11 @@
 @media print {
   @page {
     margin: 0.5in;
+    background: var(--background);
   }
 
   body {
-    background: white;
+    background: var(--background);
   }
 
   body * {
