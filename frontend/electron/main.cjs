@@ -25,7 +25,9 @@ const appName = "Resolve Time Tracker"
 const appIcon = path.join(frontendRoot, "public", "app-icon.png")
 app.setName(appName)
 app.setAppUserModelId("com.resolve-time-tracker.app")
-const hasSingleInstanceLock = app.requestSingleInstanceLock()
+const devMode = hasArg("--dev")
+const hasSingleInstanceLock =
+  devMode || app.requestSingleInstanceLock()
 if (!hasSingleInstanceLock) {
   app.quit()
 }
@@ -276,7 +278,10 @@ function useNextApiPort() {
 }
 
 async function chooseApiPort() {
-  while ((await apiIsRunning()) && !(await apiSupportsPdf())) {
+  while (
+    (await apiIsRunning()) &&
+    (devMode || !(await apiSupportsPdf()))
+  ) {
     useNextApiPort()
   }
 }
@@ -361,7 +366,11 @@ function createWindow() {
   }
 }
 
-app.on("second-instance", showWindow)
+app.on("second-instance", () => {
+  quitting = true
+  app.relaunch()
+  app.quit()
+})
 
 app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) return
