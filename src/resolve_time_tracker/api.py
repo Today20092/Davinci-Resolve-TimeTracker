@@ -163,6 +163,7 @@ class ApiState:
         report = project_report(
             request.project_name,
             sessions,
+            session_count=self.store.project_open_count(request.project_name),
             active_session=active,
             active_seconds=status["active_elapsed_seconds"],
             now=generated,
@@ -286,6 +287,7 @@ class ApiState:
         report = project_report(
             project,
             sessions,
+            session_count=self.store.project_open_count(project),
             active_session=active,
             active_seconds=status["active_elapsed_seconds"],
             now=generated,

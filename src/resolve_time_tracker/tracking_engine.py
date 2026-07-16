@@ -30,6 +30,7 @@ class TrackingEngine:
         self._previous_idle: bool | None = None
         self._tracking_enabled = True
         self._project_id: int | None = None
+        self._observed_project_name: str | None = None
         self._page = "Unknown"
         self._is_idle = False
         self._has_focus = True
@@ -87,6 +88,10 @@ class TrackingEngine:
         else:
             page = self._page
         project_changed = previous is None or not same_project
+        project_opened = (
+            snapshot.project_name is not None
+            and snapshot.project_name != self._observed_project_name
+        )
         page_changed = page != self._page
         rendering_changed = snapshot.is_rendering != self._is_rendering
         backfill_unknown = (
@@ -107,6 +112,8 @@ class TrackingEngine:
             if project_changed:
                 if snapshot.project_name:
                     self._project_id = self._store.upsert_project(snapshot.project_name)
+                    if project_opened:
+                        self._store.record_project_open(self._project_id, observed_at)
                 else:
                     self._project_id = None
             self._is_rendering = snapshot.is_rendering
@@ -115,6 +122,7 @@ class TrackingEngine:
         if self._store.active_session() is not None:
             self._store.update_heartbeat(observed_at)
         self._previous = snapshot
+        self._observed_project_name = snapshot.project_name
         self._previous_idle = idle_now
         return snapshot
 

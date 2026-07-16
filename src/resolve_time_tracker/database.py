@@ -59,6 +59,25 @@ class SQLiteStore:
                 (project_id, _format_utc(started_at), page, activity_category),
             )
 
+    def record_project_open(self, project_id: int, opened_at: datetime) -> None:
+        with self._connection:
+            self._connection.execute(
+                "INSERT INTO project_opens(project_id, opened_at_utc) VALUES (?, ?)",
+                (project_id, _format_utc(opened_at)),
+            )
+
+    def project_open_count(self, resolve_name: str) -> int:
+        row = self._connection.execute(
+            """
+            SELECT COUNT(*) AS open_count
+            FROM project_opens
+            JOIN projects ON projects.id = project_opens.project_id
+            WHERE projects.resolve_name = ?
+            """,
+            (resolve_name,),
+        ).fetchone()
+        return int(row["open_count"])
+
     def close_active_session(self, ended_at: datetime) -> None:
         active = self.active_session()
         if active is None:
@@ -150,7 +169,8 @@ class SQLiteStore:
                 """
                 SELECT
                   projects.resolve_name AS project_name,
-                  COUNT(sessions.id) AS session_count,
+                  (SELECT COUNT(*) FROM project_opens
+                   WHERE project_opens.project_id = projects.id) AS session_count,
                   COALESCE(SUM(
                     strftime('%s', sessions.ended_at_utc) -
                     strftime('%s', sessions.started_at_utc)
@@ -294,12 +314,41 @@ class SQLiteStore:
                   )
                 );
 
+                CREATE TABLE IF NOT EXISTS project_opens (
+                  id INTEGER PRIMARY KEY,
+                  project_id INTEGER NOT NULL REFERENCES projects(id),
+                  opened_at_utc TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS settings (
                   id INTEGER PRIMARY KEY CHECK (id = 1),
                   idle_timeout_seconds INTEGER NOT NULL CHECK (idle_timeout_seconds > 0)
                 );
 
                 INSERT OR IGNORE INTO settings(id, idle_timeout_seconds) VALUES (1, 300);
+                """
+            )
+            self._connection.execute(
+                """
+                -- ponytail: old databases lack open events; a one-hour gap is the
+                -- migration-only estimate. New opens are recorded exactly.
+                INSERT INTO project_opens(project_id, opened_at_utc)
+                SELECT project_id, started_at_utc
+                FROM (
+                  SELECT
+                    project_id,
+                    started_at_utc,
+                    LAG(ended_at_utc) OVER (
+                      PARTITION BY project_id ORDER BY started_at_utc, id
+                    ) AS previous_ended_at_utc
+                  FROM sessions
+                )
+                WHERE NOT EXISTS (SELECT 1 FROM project_opens)
+                  AND (
+                    previous_ended_at_utc IS NULL
+                    OR (julianday(started_at_utc) - julianday(previous_ended_at_utc))
+                       * 86400 > 3600
+                  )
                 """
             )
             self._connection.execute(

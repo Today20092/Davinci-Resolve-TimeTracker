@@ -34,6 +34,7 @@ def test_project_report_concentrates_closed_and_active_session_rules():
     report = project_report(
         "Project A",
         sessions,
+        session_count=1,
         active_session=active,
         active_seconds=1800,
         now=datetime(2026, 1, 2, 10, 30, tzinfo=timezone.utc),
@@ -41,7 +42,7 @@ def test_project_report_concentrates_closed_and_active_session_rules():
 
     assert report.tracked_seconds == 5400
     assert report.today_seconds == 5400
-    assert report.session_count == 2
+    assert report.session_count == 1
     assert report.activity_totals == {
         "editing": 0,
         "playback": 3600,

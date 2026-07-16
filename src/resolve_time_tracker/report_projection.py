@@ -31,6 +31,7 @@ def project_report(
     project_name: str,
     sessions: list[dict[str, Any]],
     *,
+    session_count: int | None = None,
     active_session: dict[str, Any] | None = None,
     active_seconds: int = 0,
     now: datetime | None = None,
@@ -81,7 +82,9 @@ def project_report(
         sessions=project_sessions,
         tracked_seconds=sum(activity_totals.values()),
         today_seconds=today_seconds,
-        session_count=len(project_sessions) + (1 if active is not None else 0),
+        session_count=max(
+            session_count or 0, int(bool(project_sessions or active is not None))
+        ),
         activity_totals=activity_totals,
         page_totals=sorted(page_totals.items(), key=lambda item: item[1], reverse=True),
         date_range=(

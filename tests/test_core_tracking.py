@@ -221,6 +221,26 @@ class CoreTrackingTest(unittest.TestCase):
             [(row["project_name"], row["page"]) for row in rows],
         )
 
+    def test_project_opens_ignore_page_changes(self):
+        snapshots = [
+            RuntimeSnapshot("Project A", "edit", False, 0, True),
+            RuntimeSnapshot("Project A", "color", False, 0, True),
+            RuntimeSnapshot("Project A", "deliver", False, 0, True),
+            RuntimeSnapshot("Project B", "edit", False, 0, True),
+            RuntimeSnapshot("Project A", "edit", False, 0, True),
+        ]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with SQLiteStore(Path(tmp) / "tracker.sqlite3") as store:
+                engine = TrackingEngine(
+                    store, snapshot_provider=SequenceSnapshotProvider(snapshots)
+                )
+                for minute in range(len(snapshots)):
+                    engine.poll(utc(9, minute))
+
+                self.assertEqual(2, store.project_open_count("Project A"))
+                self.assertEqual(1, store.project_open_count("Project B"))
+
     def test_focus_and_project_transition_does_not_create_boundary_session(self):
         snapshots = [
             RuntimeSnapshot("Project A", "edit", False, 0, False),
