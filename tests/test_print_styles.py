@@ -6,6 +6,8 @@ def test_print_background_covers_the_pdf_page():
 
     print_styles = css.split("@media print", 1)[1]
     assert "html,\n  body" in print_styles
+    assert "@page {\n    margin: 0;" in print_styles
+    assert "padding: 0.5in" in print_styles
     assert "background: var(--background)" in print_styles
 
 
