@@ -35,6 +35,7 @@ class TrackingEngine:
         self._is_idle = False
         self._has_focus = True
         self._is_rendering = False
+        self._last_heartbeat_at: datetime | None = None
 
     @property
     def runtime_diagnostics(self) -> dict[str, Any]:
@@ -124,8 +125,12 @@ class TrackingEngine:
             self._is_rendering = snapshot.is_rendering
             self._open_if_billable(observed_at)
 
-        if self._store.active_session() is not None:
+        if self._store.active_session() is not None and (
+            self._last_heartbeat_at is None
+            or (observed_at - self._last_heartbeat_at).total_seconds() >= 10
+        ):
             self._store.update_heartbeat(observed_at)
+            self._last_heartbeat_at = observed_at
         self._previous = snapshot
         self._observed_project_name = snapshot.project_name
         self._previous_idle = idle_now
@@ -163,6 +168,8 @@ class TrackingEngine:
             page=self._page,
             activity_category="rendering" if self._is_rendering else "editing",
         )
+        self._last_heartbeat_at = None
 
     def _close(self, observed_at: datetime) -> None:
         self._store.close_active_session(observed_at)
+        self._last_heartbeat_at = None

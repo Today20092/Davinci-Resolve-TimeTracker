@@ -1,4 +1,6 @@
 import tempfile
+import threading
+import time
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,6 +13,7 @@ from resolve_time_tracker.activity_tracker import (
 from resolve_time_tracker.database import SQLiteStore
 from resolve_time_tracker.resolve_bridge import ResolveBridge, default_scripting_root
 from resolve_time_tracker.tracking_engine import RuntimeSnapshot, TrackingEngine
+from resolve_time_tracker.tracking_runtime import TrackingRuntime
 
 
 def utc(hour: int, minute: int = 0) -> datetime:
@@ -28,6 +31,76 @@ class SequenceSnapshotProvider:
 
 
 class RuntimeTrackingTest(unittest.TestCase):
+    def test_runtime_waits_after_each_observation_before_the_next_one(self):
+        class SlowProvider:
+            def __init__(self):
+                self.starts: list[float] = []
+                self.observed_twice = threading.Event()
+
+            def snapshot(self) -> RuntimeSnapshot:
+                self.starts.append(time.monotonic())
+                time.sleep(0.03)
+                if len(self.starts) == 2:
+                    self.observed_twice.set()
+                return RuntimeSnapshot("Project A", "cut", False, 0, True)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with SQLiteStore(Path(tmp) / "tracker.sqlite3", check_same_thread=False) as store:
+                provider = SlowProvider()
+                runtime = TrackingRuntime(
+                    TrackingEngine(store, snapshot_provider=provider),
+                    observation_interval_seconds=0.01,
+                )
+                runtime.start()
+                self.assertTrue(provider.observed_twice.wait(1))
+                runtime.stop()
+
+        self.assertGreaterEqual(provider.starts[1] - provider.starts[0], 0.04)
+
+    def test_runtime_publishes_one_observation_and_rate_limits_heartbeats(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with SQLiteStore(Path(tmp) / "tracker.sqlite3") as store:
+                provider = SequenceSnapshotProvider(
+                    [
+                        RuntimeSnapshot("Project A", "cut", False, 0, True),
+                        RuntimeSnapshot("Project A", "cut", False, 0, True),
+                        RuntimeSnapshot("Project A", "cut", False, 0, True),
+                    ]
+                )
+                runtime = TrackingRuntime(TrackingEngine(store, snapshot_provider=provider))
+
+                runtime.observe(utc(10))
+                runtime.observe(utc(10, 5))
+                runtime.observe(utc(10, 10))
+
+                active = store.active_session()
+
+        self.assertEqual(3, runtime.observation_count)
+        self.assertEqual("Project A", runtime.snapshot.project_name)
+        self.assertIsNone(runtime.last_error)
+        self.assertEqual("2026-01-02T10:10:00Z", active["last_heartbeat_at_utc"])
+
+    def test_failed_observation_keeps_published_state_and_session_open(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with SQLiteStore(Path(tmp) / "tracker.sqlite3") as store:
+                runtime = TrackingRuntime(
+                    TrackingEngine(
+                        store,
+                        snapshot_provider=SequenceSnapshotProvider(
+                            [RuntimeSnapshot("Project A", "cut", False, 0, True)]
+                        ),
+                    )
+                )
+
+                runtime.observe(utc(10))
+                succeeded = runtime.observe(utc(10, 5))
+                active = store.active_session()
+
+        self.assertFalse(succeeded)
+        self.assertEqual("Project A", runtime.snapshot.project_name)
+        self.assertIn("No dry-run snapshots remain", runtime.last_error)
+        self.assertIsNotNone(active)
+
     def test_fake_snapshots_drive_engine_events_and_heartbeats(self):
         with tempfile.TemporaryDirectory() as tmp:
             with SQLiteStore(Path(tmp) / "tracker.sqlite3") as store:

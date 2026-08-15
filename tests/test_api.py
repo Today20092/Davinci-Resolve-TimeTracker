@@ -97,13 +97,13 @@ class ApiTest(unittest.TestCase):
             {"editing": 3600, "playback": 3600, "rendering": 0},
             current["activity_totals"],
         )
-        self.assertEqual("2026-01-02T12:00:00Z", current["last_activity"])
+        self.assertEqual("2026-01-02T10:00:00Z", current["last_activity"])
         self.assertEqual("Project A", dashboard["export_preview"]["project"])
         self.assertEqual(
             "01/02/2026 - 01/02/2026", dashboard["export_preview"]["date_range"]
         )
 
-    def test_status_poll_refreshes_tracking_without_the_companion_window(self):
+    def test_status_reads_tracking_published_by_the_runtime(self):
         with tempfile.TemporaryDirectory() as tmp:
             with SQLiteStore(
                 Path(tmp) / "tracker.sqlite3", check_same_thread=False
@@ -114,13 +114,34 @@ class ApiTest(unittest.TestCase):
                         [RuntimeSnapshot("Project A", "edit", False, 0, True)]
                     ),
                 )
-                client = TestClient(
-                    create_app(store, tracking_engine=tracker, now=lambda: utc(9))
-                )
+                app = create_app(store, tracking_engine=tracker, now=lambda: utc(9))
+                app.state.api.tracking_runtime.observe(utc(9))
+                client = TestClient(app)
 
                 status = client.get("/status").json()
 
         self.assertEqual("active", status["tracking_status"])
+
+    def test_status_and_dashboard_read_published_runtime_state_without_observing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with SQLiteStore(
+                Path(tmp) / "tracker.sqlite3", check_same_thread=False
+            ) as store:
+                provider = SequenceSnapshotProvider(
+                    [
+                        RuntimeSnapshot("Project A", "edit", False, 0, True),
+                        RuntimeSnapshot("Project A", "edit", False, 0, True),
+                    ]
+                )
+                tracker = TrackingEngine(store, snapshot_provider=provider)
+                app = create_app(store, tracking_engine=tracker, now=lambda: utc(9))
+                app.state.api.tracking_runtime.observe(utc(9))
+                client = TestClient(app)
+
+                client.get("/status")
+                client.get("/dashboard")
+
+        self.assertEqual(1, len(provider.snapshots))
 
     def test_status_marks_an_old_heartbeat_stale(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -158,8 +179,12 @@ class ApiTest(unittest.TestCase):
                 app = create_app(store, tracking_engine=tracker, now=lambda: utc(9))
                 client = TestClient(app)
 
+                runtime = app.state.api.tracking_runtime
+                runtime.observe(utc(9))
                 active = client.post("/refresh").json()
+                runtime.observe(utc(9, 5))
                 idle = client.post("/refresh").json()
+                runtime.observe(utc(9, 10))
                 closed = client.post("/refresh").json()
                 paused = client.post("/tracking/pause").json()
                 error = client.post("/tracking/resume").json()
@@ -168,7 +193,7 @@ class ApiTest(unittest.TestCase):
         self.assertEqual("idle", idle["tracking_status"])
         self.assertEqual("resolve_closed", closed["tracking_status"])
         self.assertEqual("paused", paused["tracking_status"])
-        self.assertEqual("error", error["tracking_status"])
+        self.assertEqual("resolve_closed", error["tracking_status"])
 
     def test_status_projects_sessions_settings_and_csv(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -245,6 +270,7 @@ class ApiTest(unittest.TestCase):
                 )
                 client = TestClient(app)
 
+                app.state.api.tracking_runtime.observe(current_time[0])
                 refreshed = client.post("/refresh").json()
                 current_time[0] = utc(9, 1)
                 paused = client.post("/tracking/pause").json()
@@ -334,17 +360,16 @@ class ApiTest(unittest.TestCase):
                 Path(tmp) / "private-client.sqlite3", check_same_thread=False
             ) as store:
                 app = create_app(store, tracking_engine=engine)
-                app.state.api.last_runtime_error = "bridge disconnected"
                 response = TestClient(app).get("/diagnostics")
 
         self.assertEqual(200, response.status_code)
         diagnostics = response.json()
-        self.assertEqual("error", diagnostics["resolve_bridge"])
+        self.assertEqual("connected", diagnostics["resolve_bridge"])
         self.assertTrue(diagnostics["resolve_project_detected"])
         self.assertTrue(diagnostics["scripting_module_loaded"])
         self.assertEqual("DaVinci Resolve Studio", diagnostics["resolve_product"])
         self.assertEqual("21.0.2.4", diagnostics["resolve_version"])
-        self.assertEqual("bridge disconnected", diagnostics["last_runtime_error"])
+        self.assertIsNone(diagnostics["last_runtime_error"])
         self.assertIn("python_version", diagnostics)
         self.assertIn("platform", diagnostics)
         self.assertNotIn("Private Client Project", response.text)
