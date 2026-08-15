@@ -27,3 +27,11 @@ _Avoid_: Entry, log row
 **Heartbeat**:
 A periodic timestamp showing a session was still alive, used to recover unfinished sessions after shutdown or crash.
 _Avoid_: Ping, pulse
+
+**Tracking Observation**:
+A periodic reading of the open Resolve Project, Page, rendering state, and user activity used to decide whether Active Work continues. A Tracking Observation may update live state without persisting a Heartbeat.
+_Avoid_: Poll, sample
+
+**Tracked Launch**:
+A user-initiated start of DaVinci Resolve that also starts time tracking for that Resolve session.
+_Avoid_: Automatic startup, background watcher
