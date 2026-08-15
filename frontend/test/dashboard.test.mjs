@@ -23,7 +23,7 @@ test("regular desktop launches rebuild the frontend", async () => {
     await readFile(new URL("../package.json", import.meta.url), "utf8")
   )
 
-  assert.equal(packageJson.scripts.desktop, "npm run build && electron .")
+  assert.equal(packageJson.scripts.desktop, "pnpm run build && electron .")
 })
 
 test("development launches use fresh processes and API ports", async () => {

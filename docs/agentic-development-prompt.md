@@ -13,7 +13,7 @@ https://github.com/Today20092/Davinci-Resolve-TimeTracker.
 5. From the repository root, run:
    uv sync --python 3.13
    cd frontend
-   npm ci
+   pnpm install --frozen-lockfile
 6. Return to the repository root and install the Resolve menu launchers with:
    uv run --python 3.13 scripts/install_resolve_menu.py
 7. Run the documented Python and frontend checks in docs/development.md. Do not hide failures behind later successful commands.

@@ -6,7 +6,7 @@
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
-    "desktop": "npm run build && electron .",
+    "desktop": "pnpm run build && electron .",
     "desktop:dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && electron . --dev\"",
     "desktop:smoke": "electron . --smoke-test",
     "build": "tsc -b && vite build",
@@ -50,5 +50,6 @@
     "typescript-eslint": "^8",
     "vite": "^8",
     "wait-on": "^9.0.10"
-  }
+  },
+  "packageManager": "pnpm@11.21.0"
 }

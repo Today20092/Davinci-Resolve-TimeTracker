@@ -3,7 +3,7 @@
 Electron, Vite, React, Tailwind, and shadcn/ui companion app for Resolve Time Tracker.
 
 ```sh
-npm run desktop:dev
-npm run build
-npm run desktop:smoke
+pnpm run desktop:dev
+pnpm run build
+pnpm run desktop:smoke
 ```

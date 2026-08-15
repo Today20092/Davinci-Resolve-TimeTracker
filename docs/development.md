@@ -28,7 +28,7 @@ From the repository root:
 ```powershell
 uv sync --python 3.13
 cd frontend
-npm ci
+pnpm install --frozen-lockfile
 cd ..
 ```
 
@@ -36,7 +36,7 @@ cd ..
 
 ```powershell
 cd frontend
-npm run desktop:dev
+pnpm run desktop:dev
 ```
 
 Electron starts the Python tracker and opens the React development server. DaVinci Resolve must be running with a project open to show live project activity.
@@ -53,7 +53,7 @@ Restart Resolve, then choose **Workspace > Scripts > ResolveTimeTrackerDevMenu**
 
 Use **ResolveTimeTrackerMenu** when testing the built application. Quit an existing tracker from its tray menu before switching launch modes; Electron allows only one tracker instance. Restart the development launcher after Python or Electron main-process changes because Vite hot reload applies only to renderer source.
 
-If the development entry is missing, rerun the installer above and restart Resolve. If startup fails, run `npm run desktop:dev` from `frontend/` to keep the error visible.
+If the development entry is missing, rerun the installer above and restart Resolve. If startup fails, run `pnpm run desktop:dev` from `frontend/` to keep the error visible.
 
 ## Run Checks
 
@@ -68,13 +68,13 @@ uv run --python 3.13 -m unittest discover -s tests
 Frontend, from `frontend/`:
 
 ```powershell
-npm run lint
-npm run typecheck
+pnpm run lint
+pnpm run typecheck
 npm test
-npm run build
+pnpm run build
 ```
 
-Format changed frontend files with `npm run format`.
+Format changed frontend files with `pnpm run format`.
 
 ## Run Individual Layers
 
@@ -90,8 +90,8 @@ Run a packaged-style desktop smoke test after building the frontend:
 
 ```powershell
 cd frontend
-npm run build
-npm run desktop:smoke
+pnpm run build
+pnpm run desktop:smoke
 ```
 
 Use `--db path/to/test.sqlite3` when development should not touch normal tracking history.
