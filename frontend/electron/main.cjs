@@ -1,6 +1,7 @@
 const {
   app,
   BrowserWindow,
+  clipboard,
   Menu,
   Tray,
   dialog,
@@ -11,13 +12,12 @@ const {
 const { spawn } = require("node:child_process")
 const fs = require("node:fs")
 const http = require("node:http")
+const os = require("node:os")
 const path = require("node:path")
 const { trayPresentation } = require("./tray-status.cjs")
 const { restartSidecar } = require("./sidecar-lifecycle.cjs")
-const {
-  setStartupEnabled,
-  startupEnabled,
-} = require("./startup-settings.cjs")
+const { buildSupportReport } = require("./support-report.cjs")
+const { setStartupEnabled, startupEnabled } = require("./startup-settings.cjs")
 
 const frontendRoot = path.resolve(__dirname, "..")
 const repoRoot = path.resolve(frontendRoot, "..")
@@ -26,8 +26,7 @@ const appIcon = path.join(frontendRoot, "public", "app-icon.png")
 app.setName(appName)
 app.setAppUserModelId("com.resolve-time-tracker.app")
 const devMode = hasArg("--dev")
-const hasSingleInstanceLock =
-  devMode || app.requestSingleInstanceLock()
+const hasSingleInstanceLock = devMode || app.requestSingleInstanceLock()
 if (!hasSingleInstanceLock) {
   app.quit()
 }
@@ -43,6 +42,8 @@ let win = null
 let quitting = false
 let closeBehavior = "tray"
 let smokeFinished = false
+let lastSidecarError = null
+let sidecarStderr = ""
 
 ipcMain.handle("desktop-settings", () => ({
   launchAtStartup:
@@ -82,6 +83,24 @@ ipcMain.handle("export-pdf", async (event, filename) => {
     preferCSSPageSize: true,
   })
   fs.writeFileSync(filePath, pdf)
+  return true
+})
+
+ipcMain.handle("copy-support-report", (_event, report) => {
+  clipboard.writeText(String(report))
+  return true
+})
+
+ipcMain.handle("get-support-report", () => supportReport())
+
+ipcMain.handle("save-support-report", async (event, report) => {
+  const window = BrowserWindow.fromWebContents(event.sender)
+  const { canceled, filePath } = await dialog.showSaveDialog(window, {
+    defaultPath: "Resolve-Time-Tracker-support.txt",
+    filters: [{ name: "Text", extensions: ["txt"] }],
+  })
+  if (canceled || !filePath) return false
+  fs.writeFileSync(filePath, String(report), "utf8")
   return true
 })
 
@@ -127,14 +146,20 @@ function startSidecar() {
   })
 
   sidecar.stdout.on("data", (data) => process.stdout.write(data))
-  sidecar.stderr.on("data", (data) => process.stderr.write(data))
+  sidecar.stderr.on("data", (data) => {
+    const text = data.toString()
+    sidecarStderr = `${sidecarStderr}${text}`.slice(-4000)
+    process.stderr.write(data)
+  })
   sidecar.on("exit", (code, signal) => {
     sidecar = null
-    console.error(`Python sidecar exited: code=${code} signal=${signal}`)
+    lastSidecarError = `Python sidecar exited: code=${code} signal=${signal}`
+    console.error(lastSidecarError)
     scheduleSidecarRestart()
   })
 
   sidecar.on("error", (error) => {
+    lastSidecarError = error.message
     dialog.showErrorBox(
       "Resolve Time Tracker",
       `Could not start Python sidecar:\n${error.message}`
@@ -183,9 +208,9 @@ function fetchHealth(timeoutMs = 1000) {
   })
 }
 
-function fetchStatus(timeoutMs = 1000) {
+function fetchJson(path, timeoutMs = 1000) {
   return new Promise((resolve, reject) => {
-    const request = http.get(`${apiBase}/status`, (response) => {
+    const request = http.get(`${apiBase}${path}`, (response) => {
       let body = ""
       response.setEncoding("utf8")
       response.on("data", (chunk) => (body += chunk))
@@ -202,8 +227,14 @@ function fetchStatus(timeoutMs = 1000) {
   })
 }
 
+function fetchStatus(timeoutMs = 1000) {
+  return fetchJson("/status", timeoutMs)
+}
+
 function trayIcon() {
-  const icon = nativeImage.createFromPath(appIcon).resize({ width: 16, height: 16 })
+  const icon = nativeImage
+    .createFromPath(appIcon)
+    .resize({ width: 16, height: 16 })
   if (icon.isEmpty()) throw new Error(`Unable to load tray icon: ${appIcon}`)
   return icon
 }
@@ -278,12 +309,40 @@ function useNextApiPort() {
 }
 
 async function chooseApiPort() {
-  while (
-    (await apiIsRunning()) &&
-    (devMode || !(await apiSupportsPdf()))
-  ) {
+  while ((await apiIsRunning()) && (devMode || !(await apiSupportsPdf()))) {
     useNextApiPort()
   }
+}
+
+function fetchDiagnostics(timeoutMs = 1000) {
+  return fetchJson("/diagnostics", timeoutMs)
+}
+
+async function supportReport() {
+  let sidecarState
+  try {
+    sidecarState = { reachable: true, diagnostics: await fetchDiagnostics() }
+  } catch (error) {
+    sidecarState = {
+      reachable: false,
+      error: lastSidecarError || error.message,
+    }
+  }
+  return buildSupportReport({
+    generatedAt: new Date().toISOString(),
+    appVersion: app.getVersion(),
+    electronVersion: process.versions.electron,
+    platform: `${process.platform} ${os.release()} ${process.arch}`,
+    apiBase,
+    electronMemoryMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
+    launchMode: app.isPackaged
+      ? "packaged"
+      : devMode
+        ? "development"
+        : "source checkout",
+    sidecar: { ...sidecarState, stderr: sidecarStderr },
+    userHome: os.homedir(),
+  })
 }
 
 function finishSmoke(ok, message = null) {

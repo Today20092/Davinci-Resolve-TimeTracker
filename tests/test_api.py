@@ -314,6 +314,43 @@ class ApiTest(unittest.TestCase):
         self.assertEqual({"ok": True}, response.json())
         engine.poll.assert_not_called()
 
+    def test_diagnostics_reports_runtime_state_without_polling_or_project_data(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            engine = Mock()
+            engine.runtime_diagnostics = {
+                "scripting_module_available": True,
+                "scripting_module_loaded": True,
+                "resolve_product": "DaVinci Resolve Studio",
+                "resolve_version": "21.0.2.4",
+            }
+            engine.previous_snapshot = RuntimeSnapshot(
+                project_name="Private Client Project",
+                page="edit",
+                is_rendering=False,
+                idle_seconds=0,
+                resolve_is_foreground=True,
+            )
+            with SQLiteStore(
+                Path(tmp) / "private-client.sqlite3", check_same_thread=False
+            ) as store:
+                app = create_app(store, tracking_engine=engine)
+                app.state.api.last_runtime_error = "bridge disconnected"
+                response = TestClient(app).get("/diagnostics")
+
+        self.assertEqual(200, response.status_code)
+        diagnostics = response.json()
+        self.assertEqual("error", diagnostics["resolve_bridge"])
+        self.assertTrue(diagnostics["resolve_project_detected"])
+        self.assertTrue(diagnostics["scripting_module_loaded"])
+        self.assertEqual("DaVinci Resolve Studio", diagnostics["resolve_product"])
+        self.assertEqual("21.0.2.4", diagnostics["resolve_version"])
+        self.assertEqual("bridge disconnected", diagnostics["last_runtime_error"])
+        self.assertIn("python_version", diagnostics)
+        self.assertIn("platform", diagnostics)
+        self.assertNotIn("Private Client Project", response.text)
+        self.assertNotIn("private-client.sqlite3", response.text)
+        engine.poll.assert_not_called()
+
     def test_run_api_starts_tracking_api_with_resolve_bridge(self):
         with tempfile.TemporaryDirectory() as tmp:
             with (

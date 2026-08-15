@@ -44,6 +44,11 @@ Quit the tracker before copying or restoring this file.
 
 ## Get more diagnostic information
 
+In the desktop app, open **Settings > Support report**, then choose **Copy
+report** or **Save report**. Paste or attach the result when opening a GitHub
+issue. Review it before sharing; the generated report excludes Resolve project
+names and tracking history.
+
 Run the tracker from a terminal to keep startup errors visible:
 
 ```powershell

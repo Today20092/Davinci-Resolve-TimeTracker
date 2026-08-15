@@ -50,9 +50,16 @@ class ResolveBridge:
         self.activity_probe = activity_probe or default_activity_probe()
         self._resolve_object = resolve_object
         self._module: Any | None = None
+        self._product_name: str | None = None
+        self._version: str | None = None
 
     def snapshot(self) -> RuntimeSnapshot:
         resolve = self.resolve()
+        if self._product_name is None:
+            product_name = getattr(resolve, "GetProductName", None)
+            version = getattr(resolve, "GetVersionString", None)
+            self._product_name = _call(product_name) if callable(product_name) else None
+            self._version = _call(version) if callable(version) else None
         project = self._current_project(resolve)
         page = _call(resolve.GetCurrentPage)
 
@@ -81,6 +88,15 @@ class ResolveBridge:
             timeline_id=timeline_id,
             timecode=timecode,
         )
+
+    def diagnostics(self) -> dict[str, Any]:
+        return {
+            "scripting_module_available": self.module_path.is_file(),
+            "scripting_module_loaded": self._module is not None
+            or self._resolve_object is not None,
+            "resolve_product": self._product_name,
+            "resolve_version": self._version,
+        }
 
     def resolve(self) -> Any:
         if self._resolve_object is not None:

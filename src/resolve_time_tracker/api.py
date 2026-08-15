@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
+import platform
+import sys
 import threading
 import time
 from datetime import datetime, timezone
@@ -64,6 +67,40 @@ class ApiState:
     def status(self) -> dict[str, Any]:
         with self.lock:
             return self._status_unlocked()
+
+    def diagnostics(self) -> dict[str, Any]:
+        with self.lock:
+            snapshot = (
+                self.tracking_engine.previous_snapshot
+                if self.tracking_engine is not None
+                else None
+            )
+            bridge = (
+                "error"
+                if self.last_runtime_error
+                else "connected"
+                if snapshot is not None
+                else "waiting"
+                if self.tracking_engine is not None
+                else "unavailable"
+            )
+            runtime_diagnostics = (
+                self.tracking_engine.runtime_diagnostics
+                if self.tracking_engine is not None
+                else {}
+            )
+            return {
+                "python_version": platform.python_version(),
+                "process_id": os.getpid(),
+                "platform": platform.platform(),
+                "resolve_bridge": bridge,
+                "resolve_project_detected": bool(
+                    snapshot is not None and snapshot.project_name
+                ),
+                "last_runtime_error": self.last_runtime_error,
+                "executable": Path(sys.executable).name,
+                **runtime_diagnostics,
+            }
 
     def refresh(self) -> dict[str, Any]:
         with self.lock:
@@ -362,6 +399,10 @@ def create_app(
     @app.get("/health")
     def health() -> dict[str, bool]:
         return {"ok": True}
+
+    @app.get("/diagnostics")
+    def diagnostics() -> dict[str, Any]:
+        return api.diagnostics()
 
     @app.get("/status")
     def status() -> dict[str, Any]:

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Bar, BarChart, Cell, LabelList, XAxis, YAxis } from "recharts"
 import {
+  IconCopy,
   IconDeviceFloppy,
   IconDownload,
   IconFolderOpen,
@@ -177,6 +178,10 @@ function App() {
     () => localStorage.closeBehavior || "tray"
   )
   const [error, setError] = useState<string | null>(null)
+  const [supportMessage, setSupportMessage] = useState<string | null>(null)
+  const [supportReportText, setSupportReportText] = useState<string | null>(
+    null
+  )
   const [sessionSort, setSessionSort] = useState<{
     key: keyof Session
     direction: "ascending" | "descending"
@@ -348,6 +353,40 @@ function App() {
     await runAction(() =>
       sidecar.updateSettings(Math.max(1, Number(idleMinutes) || 1) * 60)
     )
+  }
+
+  async function copySupportReport() {
+    if (!window.desktop || !supportReportText) return
+    try {
+      await window.desktop.copySupportReport(supportReportText)
+      setSupportMessage("Support report copied")
+      setError(null)
+    } catch (caught) {
+      setError(formatSidecarError(caught))
+    }
+  }
+
+  async function viewSupportReport() {
+    if (!window.desktop) return
+    try {
+      setSupportReportText(await window.desktop.getSupportReport())
+      setSupportMessage(null)
+      setError(null)
+    } catch (caught) {
+      setError(formatSidecarError(caught))
+    }
+  }
+
+  async function saveSupportReport() {
+    if (!window.desktop || !supportReportText) return
+    try {
+      if (await window.desktop.saveSupportReport(supportReportText)) {
+        setSupportMessage("Support report saved")
+      }
+      setError(null)
+    } catch (caught) {
+      setError(formatSidecarError(caught))
+    }
   }
 
   function exportCsv() {
@@ -1006,8 +1045,7 @@ function App() {
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        Rendering and exporting continue to count as active work,
-                        even after this idle timeout.
+                        {"Rendering and exporting continue to count as active work, even after this idle timeout."}
                       </TooltipContent>
                     </Tooltip>
                   </div>
@@ -1095,6 +1133,18 @@ function App() {
                         <IconFolder data-icon="inline-start" />
                         Open data folder
                       </Button>
+                      <Label>Support report</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Includes runtime and connection details, but not Resolve
+                        project names or tracking history.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => void viewSupportReport()}
+                      >
+                        View support report
+                      </Button>
                     </>
                   )}
                 </div>
@@ -1103,6 +1153,34 @@ function App() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <Dialog
+        open={supportReportText !== null}
+        onOpenChange={(open) => !open && setSupportReportText(null)}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Support report</DialogTitle>
+            <DialogDescription>
+              Review this report before attaching it to a GitHub issue.
+            </DialogDescription>
+          </DialogHeader>
+          <pre className="max-h-96 overflow-auto rounded-md bg-muted p-3 text-xs whitespace-pre-wrap">
+            {supportReportText}
+          </pre>
+          {supportMessage && <p role="status">{supportMessage}</p>}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => void copySupportReport()}>
+              <IconCopy data-icon="inline-start" />
+              Copy report
+            </Button>
+            <Button variant="outline" onClick={() => void saveSupportReport()}>
+              <IconDownload data-icon="inline-start" />
+              Save report
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={selectedSession !== null}

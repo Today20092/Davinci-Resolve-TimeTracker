@@ -170,6 +170,11 @@ More detail lives in [docs/platform-support.md](docs/platform-support.md).
 
 See [Troubleshooting](docs/troubleshooting.md) when the Resolve menu item is missing, the tracker is disconnected, or time is not increasing.
 
+For connection or performance problems, open **Settings > Support report** in
+the desktop app and choose **Copy report** or **Save report**. Paste or attach
+that report to your GitHub issue. It includes runtime and connection details,
+but not Resolve project names or tracking history.
+
 ## Architecture
 
 <details>

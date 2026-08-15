@@ -37,6 +37,11 @@ class TrackingEngine:
         self._is_rendering = False
 
     @property
+    def runtime_diagnostics(self) -> dict[str, Any]:
+        diagnostics = getattr(self._snapshot_provider, "diagnostics", None)
+        return diagnostics() if callable(diagnostics) else {}
+
+    @property
     def previous_snapshot(self) -> RuntimeSnapshot | None:
         return self._previous
 
