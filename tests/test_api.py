@@ -310,8 +310,38 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(
             "text/event-stream; charset=utf-8", response.headers["content-type"]
         )
+        self.assertIn("event: status", body)
         self.assertIn("event: dashboard", body)
         self.assertIn("data: {}", body)
+
+    def test_heartbeat_event_does_not_rebuild_dashboard_history(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with SQLiteStore(
+                Path(tmp) / "tracker.sqlite3", check_same_thread=False
+            ) as store:
+                tracker = TrackingEngine(
+                    store,
+                    snapshot_provider=SequenceSnapshotProvider(
+                        [
+                            RuntimeSnapshot("Project A", "edit", False, 0, True),
+                            RuntimeSnapshot("Project A", "edit", False, 0, True),
+                        ]
+                    ),
+                )
+                app = create_app(store, tracking_engine=tracker, now=lambda: utc(9))
+                runtime = app.state.api.tracking_runtime
+                runtime.observe(utc(9))
+                events = app.state.api.events(once=False, poll_interval_seconds=0)
+
+                first = next(events)
+                initial_dashboard = next(events)
+                runtime.observe(utc(9, 10))
+                heartbeat = next(events)
+
+        self.assertIn("event: status", first)
+        self.assertIn("event: dashboard", initial_dashboard)
+        self.assertIn("event: status", heartbeat)
+        self.assertNotIn("event: dashboard", heartbeat)
 
     def test_allows_frontend_origin(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -18,6 +18,7 @@ import {
 } from "@tabler/icons-react"
 
 import {
+  advanceActiveElapsed,
   createSidecarClient,
   formatSidecarError,
   type CurrentProjectDashboard,
@@ -227,9 +228,17 @@ function App() {
       setError(formatSidecarError(error))
     })
     return sidecar.watchDashboard({
-      onUpdate: applyDashboard,
+      onDashboard: applyDashboard,
+      onStatus: setStatus,
       onError: (error) => setError(formatSidecarError(error)),
     })
+  }, [])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setStatus(advanceActiveElapsed)
+    }, 1000)
+    return () => window.clearInterval(timer)
   }, [])
 
   useEffect(() => {

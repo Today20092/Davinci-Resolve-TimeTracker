@@ -16,7 +16,12 @@ class SQLiteStore:
             self.path, check_same_thread=check_same_thread
         )
         self._connection.row_factory = sqlite3.Row
+        self._read_model_revision = 0
         self._create_schema()
+
+    @property
+    def read_model_revision(self) -> int:
+        return self._read_model_revision
 
     def __enter__(self) -> SQLiteStore:
         return self
@@ -29,7 +34,7 @@ class SQLiteStore:
 
     def upsert_project(self, resolve_name: str) -> int:
         with self._connection:
-            self._connection.execute(
+            cursor = self._connection.execute(
                 "INSERT OR IGNORE INTO projects(resolve_name) VALUES (?)",
                 (resolve_name,),
             )
@@ -37,6 +42,8 @@ class SQLiteStore:
                 "SELECT id FROM projects WHERE resolve_name = ?",
                 (resolve_name,),
             ).fetchone()
+        if cursor.rowcount:
+            self._read_model_revision += 1
         return int(row["id"])
 
     def open_active_session(
@@ -58,6 +65,7 @@ class SQLiteStore:
                 """,
                 (project_id, _format_utc(started_at), page, activity_category),
             )
+        self._read_model_revision += 1
 
     def record_project_open(self, project_id: int, opened_at: datetime) -> None:
         with self._connection:
@@ -65,6 +73,7 @@ class SQLiteStore:
                 "INSERT INTO project_opens(project_id, opened_at_utc) VALUES (?, ?)",
                 (project_id, _format_utc(opened_at)),
             )
+        self._read_model_revision += 1
 
     def project_open_count(self, resolve_name: str) -> int:
         row = self._connection.execute(
@@ -88,6 +97,7 @@ class SQLiteStore:
         if ended <= started:
             with self._connection:
                 self._connection.execute("DELETE FROM active_session WHERE id = 1")
+            self._read_model_revision += 1
             return
 
         with self._connection:
@@ -105,6 +115,7 @@ class SQLiteStore:
                 ),
             )
             self._connection.execute("DELETE FROM active_session WHERE id = 1")
+        self._read_model_revision += 1
 
     def update_heartbeat(self, observed_at: datetime) -> None:
         with self._connection:
@@ -133,6 +144,7 @@ class SQLiteStore:
                 ),
             )
             self._connection.execute("DELETE FROM active_session WHERE id = 1")
+        self._read_model_revision += 1
 
     def active_session(self) -> sqlite3.Row | None:
         return self._connection.execute(
@@ -144,6 +156,7 @@ class SQLiteStore:
             self._connection.execute(
                 "UPDATE active_session SET page = ? WHERE id = 1", (page,)
             )
+        self._read_model_revision += 1
 
     def sessions(self) -> list[sqlite3.Row]:
         return list(
@@ -228,6 +241,7 @@ class SQLiteStore:
             )
             if cursor.rowcount == 0:
                 raise ValueError(f"Session {session_id} does not exist")
+        self._read_model_revision += 1
 
     def idle_timeout_seconds(self) -> int:
         row = self._connection.execute(

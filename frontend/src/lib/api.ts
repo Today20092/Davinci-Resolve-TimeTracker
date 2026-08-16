@@ -85,6 +85,19 @@ export function formatSidecarError(error: unknown) {
   return error instanceof Error ? error.message : String(error)
 }
 
+export function advanceActiveElapsed(status: Status): Status {
+  if (status.tracking_status !== "active") return status
+  const active_elapsed_seconds = status.active_elapsed_seconds + 1
+  const hours = Math.floor(active_elapsed_seconds / 3600)
+  const minutes = Math.floor((active_elapsed_seconds % 3600) / 60)
+  const seconds = active_elapsed_seconds % 60
+  return {
+    ...status,
+    active_elapsed_seconds,
+    active_elapsed: `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`,
+  }
+}
+
 export const apiBase =
   (typeof window === "undefined"
     ? null
@@ -168,16 +181,25 @@ export function createSidecarClient({
         })
       ),
     watchDashboard({
-      onUpdate,
+      onDashboard,
+      onStatus,
       onError,
     }: {
-      onUpdate: (update: Dashboard) => void
+      onDashboard: (update: Dashboard) => void
+      onStatus: (update: Status) => void
       onError: (error: unknown) => void
     }) {
       const Source = eventSource ?? EventSource
       const source = new Source(`${baseUrl}/events`)
       source.addEventListener("dashboard", () => {
-        void loadDashboard().then(onUpdate, onError)
+        void loadDashboard().then(onDashboard, onError)
+      })
+      source.addEventListener("status", (event) => {
+        try {
+          onStatus(JSON.parse(event.data) as Status)
+        } catch (error) {
+          onError(error)
+        }
       })
       source.onerror = () => onError(new Error("Waiting for the sidecar API"))
       return () => source.close()

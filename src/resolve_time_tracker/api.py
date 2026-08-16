@@ -211,8 +211,12 @@ class ApiState:
         )
 
     def events(self, *, once: bool, poll_interval_seconds: float) -> Iterator[str]:
+        read_model_revision: int | None = None
         while True:
-            yield _sse("dashboard", {})
+            yield _sse("status", self.status())
+            if self.store.read_model_revision != read_model_revision:
+                read_model_revision = self.store.read_model_revision
+                yield _sse("dashboard", {})
             if once:
                 return
             time.sleep(poll_interval_seconds)
