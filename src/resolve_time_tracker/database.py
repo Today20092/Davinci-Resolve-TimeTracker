@@ -262,6 +262,20 @@ class SQLiteStore:
                 (seconds,),
             )
 
+    def resolve_executable(self) -> Path | None:
+        row = self._connection.execute(
+            "SELECT resolve_executable FROM settings WHERE id = 1"
+        ).fetchone()
+        value = row["resolve_executable"]
+        return Path(value) if value else None
+
+    def set_resolve_executable(self, executable: Path) -> None:
+        with self._connection:
+            self._connection.execute(
+                "UPDATE settings SET resolve_executable = ? WHERE id = 1",
+                (str(executable),),
+            )
+
     def write_csv(self, output: TextIO) -> None:
         import csv
 
@@ -336,12 +350,20 @@ class SQLiteStore:
 
                 CREATE TABLE IF NOT EXISTS settings (
                   id INTEGER PRIMARY KEY CHECK (id = 1),
-                  idle_timeout_seconds INTEGER NOT NULL CHECK (idle_timeout_seconds > 0)
+                  idle_timeout_seconds INTEGER NOT NULL CHECK (idle_timeout_seconds > 0),
+                  resolve_executable TEXT
                 );
 
                 INSERT OR IGNORE INTO settings(id, idle_timeout_seconds) VALUES (1, 300);
                 """
             )
+            columns = {
+                row["name"] for row in self._connection.execute("PRAGMA table_info(settings)")
+            }
+            if "resolve_executable" not in columns:
+                self._connection.execute(
+                    "ALTER TABLE settings ADD COLUMN resolve_executable TEXT"
+                )
             self._connection.execute(
                 """
                 -- ponytail: old databases lack open events; a one-hour gap is the

@@ -82,6 +82,12 @@ class LauncherTest(unittest.TestCase):
         self.assertEqual("127.0.0.1", run_api.call_args.kwargs["host"])
         self.assertEqual(9000, run_api.call_args.kwargs["port"])
 
+    def test_tracked_launch_runs_headless_lifecycle(self):
+        with patch("resolve_time_tracker.tracked_launch.launch_tracking") as launch:
+            self.assertEqual(0, main(["--tracked-launch"]))
+
+        launch.assert_called_once_with(default_db_path())
+
     def test_default_launches_electron(self):
         with patch(
             "scripts.ResolveTimeTracker.run_electron_companion", return_value=0

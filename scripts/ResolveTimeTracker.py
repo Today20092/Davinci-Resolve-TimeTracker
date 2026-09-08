@@ -35,6 +35,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--db", type=Path, default=default_db_path())
     parser.add_argument("--api", action="store_true")
     parser.add_argument("--tracker", action="store_true")
+    parser.add_argument("--tracked-launch", action="store_true")
     parser.add_argument("--companion", action="store_true")
     parser.add_argument("--background", action="store_true")
     parser.add_argument("--dev", action="store_true")
@@ -113,6 +114,15 @@ def main(argv: list[str] | None = None) -> int:
         from resolve_time_tracker.api import run_api
 
         run_api(args.db, host=args.host, port=args.port)
+        return 0
+    if args.tracked_launch:
+        from resolve_time_tracker.tracked_launch import LaunchError, launch_tracking
+
+        try:
+            launch_tracking(args.db)
+        except LaunchError as exc:
+            print(exc, file=sys.stderr)
+            return 1
         return 0
     return run_electron_companion(args.db, background=args.background, dev=args.dev)
 
