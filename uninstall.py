@@ -141,7 +141,7 @@ def main() -> int:
     source_dir = (
         args.source_dir or installed_source_dir(menu_script) or data_dir() / "source"
     )
-    print("Quit Resolve Time Tracker from its tray menu before continuing.")
+    print("Close Resolve and the tracker dashboard before continuing.")
     print("Uninstall plan:")
     print(f"  - Remove source and app files: {source_dir}")
     print(f"  - Remove Resolve menu entry: {menu_script}")
@@ -155,6 +155,11 @@ def main() -> int:
         not args.yes
         and confirm("Also permanently delete all tracked projects and time?")
     )
+    if platform.system() == "Windows":
+        from install import windows_launcher_paths
+
+        for launcher in windows_launcher_paths():
+            launcher.unlink(missing_ok=True)
     remove_installation(
         source_dir=source_dir,
         menu_script=menu_script,

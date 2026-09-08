@@ -4,7 +4,7 @@
 
 - Git
 - `uv`
-- Node.js with npm
+- Node.js with pnpm
 - DaVinci Resolve Studio for live integration testing
 
 The project supports Python 3.10 through 3.13. Installer and development examples use Python 3.13.
@@ -39,7 +39,7 @@ cd frontend
 pnpm run desktop:dev
 ```
 
-Electron starts the Python tracker and opens the React development server. DaVinci Resolve must be running with a project open to show live project activity.
+Electron opens the dashboard and connects to the shared runtime. Start a tracked editing session with `uv run --python 3.13 scripts/ResolveTimeTracker.py --tracked-launch`. Without tracking, the dashboard starts temporary read-only reporting.
 
 ### Launch development mode from Resolve
 
@@ -51,7 +51,7 @@ uv run --python 3.13 scripts/install_resolve_menu.py
 
 Restart Resolve, then choose **Workspace > Scripts > ResolveTimeTrackerDevMenu**. This starts Vite and Electron in development mode, so frontend source changes hot-reload without rebuilding `frontend/dist`.
 
-Use **ResolveTimeTrackerMenu** when testing the built application. Quit an existing tracker from its tray menu before switching launch modes; Electron allows only one tracker instance. Restart the development launcher after Python or Electron main-process changes because Vite hot reload applies only to renderer source.
+Use **ResolveTimeTrackerMenu** to attach tracking to the open Resolve session. Close the dashboard before switching desktop launch modes. Close Resolve before replacing Python runtime code. Vite hot reload applies only to renderer source.
 
 If the development entry is missing, rerun the installer above and restart Resolve. If startup fails, run `pnpm run desktop:dev` from `frontend/` to keep the error visible.
 
@@ -62,7 +62,7 @@ Python, from the repository root:
 ```powershell
 uv run --python 3.13 ruff format --check .
 uv run --python 3.13 ruff check .
-uv run --python 3.13 -m unittest discover -s tests
+uv run --python 3.13 -m pytest -q
 ```
 
 Frontend, from `frontend/`:
@@ -70,7 +70,7 @@ Frontend, from `frontend/`:
 ```powershell
 pnpm run lint
 pnpm run typecheck
-npm test
+pnpm test
 pnpm run build
 ```
 
@@ -81,10 +81,10 @@ Format changed frontend files with `pnpm run format`.
 Start the Python API and tracker without Electron:
 
 ```powershell
-uv run --python 3.13 scripts/ResolveTimeTracker.py --api
+uv run --python 3.13 scripts/ResolveTimeTracker.py --tracked-launch
 ```
 
-Its local API is available at `http://127.0.0.1:8765`; interactive FastAPI documentation is at `/docs`.
+The runtime publishes its loopback port in `tracker.runtime.json` beside the database. That file contains a private lifecycle token; do not share it. No fixed port or dormant watcher is needed.
 
 Run a packaged-style desktop smoke test after building the frontend:
 
@@ -95,6 +95,8 @@ pnpm run desktop:smoke
 ```
 
 Use `--db path/to/test.sqlite3` when development should not touch normal tracking history.
+
+Run the five-minute synthetic benchmark with `uv run --python 3.13 scripts/benchmark_runtime.py --output benchmark-runtime.json`. It measures the real runtime with synthetic Active Work, not Resolve scripting performance. The temporary database and simulated Resolve process are discarded. CPU and memory are reported, not CI thresholds.
 
 ## Architecture
 

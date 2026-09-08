@@ -2,81 +2,65 @@ const {
   app,
   BrowserWindow,
   clipboard,
-  Menu,
-  Tray,
   dialog,
   ipcMain,
-  nativeImage,
   shell,
 } = require("electron")
 const { spawn } = require("node:child_process")
 const fs = require("node:fs")
-const http = require("node:http")
 const os = require("node:os")
 const path = require("node:path")
-const { trayPresentation } = require("./tray-status.cjs")
-const { restartSidecar } = require("./sidecar-lifecycle.cjs")
 const { buildSupportReport } = require("./support-report.cjs")
-const { setStartupEnabled, startupEnabled } = require("./startup-settings.cjs")
+const { connectRuntime } = require("./sidecar-lifecycle.cjs")
 
 const frontendRoot = path.resolve(__dirname, "..")
 const repoRoot = path.resolve(frontendRoot, "..")
 const appName = "Resolve Time Tracker"
-const appIcon = path.join(frontendRoot, "public", "app-icon.png")
 app.setName(appName)
 app.setAppUserModelId("com.resolve-time-tracker.app")
-const devMode = hasArg("--dev")
-const hasSingleInstanceLock = devMode || app.requestSingleInstanceLock()
-if (!hasSingleInstanceLock) {
-  app.quit()
-}
-let apiPort = Number(
-  process.env.RESOLVE_TIME_TRACKER_API_PORT || readArg("--port") || 8765
-)
-let apiBase = `http://127.0.0.1:${apiPort}`
-let sidecar = null
-let sidecarRestartTimer = null
-let tray = null
-let trayTimer = null
+const devMode = process.argv.includes("--dev")
+const single = app.requestSingleInstanceLock()
+if (!single) app.quit()
 let win = null
+let connection = null
+let child = null
 let quitting = false
-let closeBehavior = "tray"
-let smokeFinished = false
-let lastSidecarError = null
+let released = false
 let sidecarStderr = ""
+let lastSidecarError = null
 
-ipcMain.handle("desktop-settings", () => ({
-  launchAtStartup:
-    process.platform === "win32" && startupEnabled(app.getPath("appData")),
-}))
-
-ipcMain.handle("set-launch-at-startup", (_event, enabled) => {
-  if (process.platform !== "win32") return false
-  return setStartupEnabled({
-    appData: app.getPath("appData"),
-    repoRoot,
-    enabled: Boolean(enabled),
-  })
-})
-
-ipcMain.handle("set-close-behavior", (_event, behavior) => {
-  closeBehavior = behavior === "quit" ? "quit" : "tray"
-})
+function readArg(name) {
+  const index = process.argv.indexOf(name)
+  return index >= 0 ? process.argv[index + 1] : null
+}
+function defaultDb() {
+  const root =
+    process.platform === "win32"
+      ? process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local")
+      : process.platform === "darwin"
+        ? path.join(os.homedir(), "Library", "Application Support")
+        : process.env.XDG_DATA_HOME ||
+          path.join(os.homedir(), ".local", "share")
+  return path.join(root, "ResolveTimeTracker", "tracker.sqlite3")
+}
+const db = path.resolve(
+  readArg("--db") || process.env.RESOLVE_TIME_TRACKER_DB || defaultDb()
+)
 
 ipcMain.handle("open-data-folder", (_event, dbPath) => {
   if (typeof dbPath !== "string" || !dbPath) return false
   shell.showItemInFolder(path.resolve(dbPath))
   return true
 })
-
 ipcMain.handle("export-pdf", async (event, filename) => {
-  const window = BrowserWindow.fromWebContents(event.sender)
-  const { canceled, filePath } = await dialog.showSaveDialog(window, {
-    defaultPath: filename,
-    filters: [{ name: "PDF", extensions: ["pdf"] }],
-  })
+  const { canceled, filePath } = await dialog.showSaveDialog(
+    BrowserWindow.fromWebContents(event.sender),
+    {
+      defaultPath: filename,
+      filters: [{ name: "PDF", extensions: ["pdf"] }],
+    }
+  )
   if (canceled || !filePath) return false
-
   const pdf = await event.sender.printToPDF({
     pageSize: "Letter",
     printBackground: true,
@@ -85,285 +69,88 @@ ipcMain.handle("export-pdf", async (event, filename) => {
   fs.writeFileSync(filePath, pdf)
   return true
 })
-
 ipcMain.handle("copy-support-report", (_event, report) => {
   clipboard.writeText(String(report))
   return true
 })
-
 ipcMain.handle("get-support-report", () => supportReport())
-
 ipcMain.handle("save-support-report", async (event, report) => {
-  const window = BrowserWindow.fromWebContents(event.sender)
-  const { canceled, filePath } = await dialog.showSaveDialog(window, {
-    defaultPath: "Resolve-Time-Tracker-support.txt",
-    filters: [{ name: "Text", extensions: ["txt"] }],
-  })
+  const { canceled, filePath } = await dialog.showSaveDialog(
+    BrowserWindow.fromWebContents(event.sender),
+    {
+      defaultPath: "Resolve-Time-Tracker-support.txt",
+      filters: [{ name: "Text", extensions: ["txt"] }],
+    }
+  )
   if (canceled || !filePath) return false
   fs.writeFileSync(filePath, String(report), "utf8")
   return true
 })
 
-function readArg(name) {
-  const index = process.argv.indexOf(name)
-  return index >= 0 ? process.argv[index + 1] : null
-}
-
-function hasArg(name) {
-  return process.argv.includes(name)
-}
-
 function startSidecar() {
-  const db = readArg("--db") || process.env.RESOLVE_TIME_TRACKER_DB
-  const python = readArg("--python") || process.env.RESOLVE_TIME_TRACKER_PYTHON
-  const command = python || "uv"
-  const args = python
-    ? [path.join(repoRoot, "scripts", "ResolveTimeTracker.py")]
-    : [
-        "run",
-        "--isolated",
-        "--python",
-        "3.13",
-        "--with",
-        "fastapi",
-        "--with",
-        "reportlab",
-        "--with",
-        "uvicorn",
-        "scripts/ResolveTimeTracker.py",
-      ]
-
-  args.push("--api", "--host", "127.0.0.1", "--port", String(apiPort))
-  if (db) {
-    args.push("--db", db)
-  }
-
-  sidecar = spawn(command, args, {
-    cwd: repoRoot,
-    env: process.env,
-    stdio: "pipe",
-    windowsHide: true,
-  })
-
-  sidecar.stdout.on("data", (data) => process.stdout.write(data))
-  sidecar.stderr.on("data", (data) => {
-    const text = data.toString()
-    sidecarStderr = `${sidecarStderr}${text}`.slice(-4000)
-    process.stderr.write(data)
-  })
-  sidecar.on("exit", (code, signal) => {
-    sidecar = null
-    lastSidecarError = `Python sidecar exited: code=${code} signal=${signal}`
-    console.error(lastSidecarError)
-    scheduleSidecarRestart()
-  })
-
-  sidecar.on("error", (error) => {
-    lastSidecarError = error.message
-    dialog.showErrorBox(
-      "Resolve Time Tracker",
-      `Could not start Python sidecar:\n${error.message}`
+  const python =
+    readArg("--python") ||
+    process.env.RESOLVE_TIME_TRACKER_PYTHON ||
+    path.join(
+      repoRoot,
+      ".venv",
+      process.platform === "win32" ? "Scripts" : "bin",
+      process.platform === "win32" ? "python.exe" : "python"
     )
-  })
-}
-
-function scheduleSidecarRestart() {
-  if (quitting || sidecarRestartTimer) return
-  sidecarRestartTimer = setTimeout(
-    restartSidecar({
-      apiIsRunning,
-      isQuitting: () => quitting,
-      onComplete: () => (sidecarRestartTimer = null),
-      startSidecar,
-    }),
-    1000
+  if (!fs.existsSync(python))
+    throw new Error("Python environment is missing. Run the installer first.")
+  child = spawn(
+    python,
+    [
+      path.join(repoRoot, "scripts", "ResolveTimeTracker.py"),
+      "--api",
+      "--db",
+      db,
+      "--dashboard-pid",
+      String(process.pid),
+    ],
+    {
+      cwd: repoRoot,
+      env: process.env,
+      stdio: ["ignore", "ignore", "pipe"],
+      windowsHide: true,
+    }
   )
-}
-
-function stopSidecar() {
-  if (sidecar && !sidecar.killed) {
-    sidecar.kill()
-  }
-}
-
-async function apiIsRunning(timeoutMs = 250) {
-  try {
-    await fetchHealth(timeoutMs)
-    return true
-  } catch {
-    return false
-  }
-}
-
-function fetchHealth(timeoutMs = 1000) {
-  return new Promise((resolve, reject) => {
-    const request = http.get(`${apiBase}/health`, (response) => {
-      response.resume()
-      response.statusCode === 200
-        ? resolve()
-        : reject(new Error(`status ${response.statusCode}`))
-    })
-    request.on("error", reject)
-    request.setTimeout(timeoutMs, () => request.destroy(new Error("timeout")))
+  child.stderr.on("data", (data) => {
+    sidecarStderr = (sidecarStderr + data).slice(-4000)
   })
-}
-
-function fetchJson(path, timeoutMs = 1000) {
-  return new Promise((resolve, reject) => {
-    const request = http.get(`${apiBase}${path}`, (response) => {
-      let body = ""
-      response.setEncoding("utf8")
-      response.on("data", (chunk) => (body += chunk))
-      response.on("end", () => {
-        if (response.statusCode !== 200) {
-          reject(new Error(`status ${response.statusCode}`))
-          return
-        }
-        resolve(JSON.parse(body))
-      })
-    })
-    request.on("error", reject)
-    request.setTimeout(timeoutMs, () => request.destroy(new Error("timeout")))
+  child.on("error", (error) => {
+    lastSidecarError = error.message
   })
-}
-
-function fetchStatus(timeoutMs = 1000) {
-  return fetchJson("/status", timeoutMs)
-}
-
-function trayIcon() {
-  const icon = nativeImage
-    .createFromPath(appIcon)
-    .resize({ width: 16, height: 16 })
-  if (icon.isEmpty()) throw new Error(`Unable to load tray icon: ${appIcon}`)
-  return icon
-}
-
-async function updateTray() {
-  let status = null
-  try {
-    status = await fetchStatus()
-  } catch {
-    scheduleSidecarRestart()
-  }
-  const presentation = trayPresentation(status)
-  tray.setImage(trayIcon())
-  tray.setToolTip(presentation.tooltip)
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: presentation.label, enabled: false },
-      { label: "Open Resolve Time Tracker", click: showWindow },
-      { type: "separator" },
-      { label: "Quit", click: () => app.quit() },
-    ])
-  )
-}
-
-function showWindow() {
-  if (!win || win.isDestroyed()) {
-    createWindow()
-  } else {
-    win.show()
-    win.focus()
-  }
-}
-
-function createTray() {
-  tray = new Tray(trayIcon())
-  tray.on("click", showWindow)
-  void updateTray()
-  trayTimer = setInterval(updateTray, 5000)
-}
-
-async function apiSupportsPdf(timeoutMs = 250) {
-  try {
-    const paths = await new Promise((resolve, reject) => {
-      const request = http.get(`${apiBase}/openapi.json`, (response) => {
-        let body = ""
-        response.setEncoding("utf8")
-        response.on("data", (chunk) => {
-          body += chunk
-        })
-        response.on("end", () => {
-          if (response.statusCode !== 200) {
-            reject(new Error(`status ${response.statusCode}`))
-            return
-          }
-          resolve(JSON.parse(body).paths || {})
-        })
-      })
-      request.on("error", reject)
-      request.setTimeout(timeoutMs, () => {
-        request.destroy(new Error("timeout"))
-      })
-    })
-    return Object.hasOwn(paths, "/export.pdf")
-  } catch {
-    return false
-  }
-}
-
-function useNextApiPort() {
-  apiPort += 1
-  apiBase = `http://127.0.0.1:${apiPort}`
-}
-
-async function chooseApiPort() {
-  while ((await apiIsRunning()) && (devMode || !(await apiSupportsPdf()))) {
-    useNextApiPort()
-  }
-}
-
-function fetchDiagnostics(timeoutMs = 1000) {
-  return fetchJson("/diagnostics", timeoutMs)
+  child.unref()
 }
 
 async function supportReport() {
-  let sidecarState
+  let sidecar
   try {
-    sidecarState = { reachable: true, diagnostics: await fetchDiagnostics() }
+    const response = await fetch(connection.apiBase + "/diagnostics", {
+      signal: AbortSignal.timeout(1000),
+    })
+    if (!response.ok) throw new Error("status " + response.status)
+    sidecar = { reachable: true, diagnostics: await response.json() }
   } catch (error) {
-    sidecarState = {
-      reachable: false,
-      error: lastSidecarError || error.message,
-    }
+    sidecar = { reachable: false, error: lastSidecarError || error.message }
   }
   return buildSupportReport({
     generatedAt: new Date().toISOString(),
     appVersion: app.getVersion(),
     electronVersion: process.versions.electron,
-    platform: `${process.platform} ${os.release()} ${process.arch}`,
-    apiBase,
+    platform: process.platform + " " + os.release() + " " + process.arch,
+    apiBase: connection?.apiBase,
     electronMemoryMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
     launchMode: app.isPackaged
       ? "packaged"
       : devMode
         ? "development"
         : "source checkout",
-    sidecar: { ...sidecarState, stderr: sidecarStderr },
+    sidecar: { ...sidecar, stderr: sidecarStderr },
     userHome: os.homedir(),
   })
-}
-
-function finishSmoke(ok, message = null) {
-  if (smokeFinished) {
-    return
-  }
-  smokeFinished = true
-  console.log(JSON.stringify({ ok, apiBase, message }))
-  stopSidecar()
-  app.exit(ok ? 0 : 1)
-  setTimeout(() => process.exit(ok ? 0 : 1), 100)
-}
-
-async function waitForApi() {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    if (await apiIsRunning(1000)) {
-      return
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100))
-  }
-  throw new Error(`Sidecar did not respond at ${apiBase}`)
 }
 
 function createWindow() {
@@ -373,7 +160,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 560,
     title: appName,
-    icon: appIcon,
+    icon: path.join(frontendRoot, "public", "app-icon.png"),
     backgroundColor: "#ffffff",
     webPreferences: {
       contextIsolation: true,
@@ -382,91 +169,66 @@ function createWindow() {
       preload: path.join(__dirname, "preload.cjs"),
     },
   })
-  win.on("close", (event) => {
-    if (!quitting && closeBehavior === "tray") {
-      event.preventDefault()
-      win.hide()
-    } else if (!quitting) {
-      event.preventDefault()
-      quitting = true
-      app.quit()
-    }
+  win.on("closed", () => {
+    win = null
   })
-
-  const devUrl = hasArg("--dev")
-    ? `http://127.0.0.1:5173/?api=${encodeURIComponent(apiBase)}`
-    : null
-  const builtIndex = path.join(frontendRoot, "dist", "index.html")
-
-  if (hasArg("--smoke-test")) {
-    const timer = setTimeout(() => finishSmoke(false, "timeout"), 15000)
+  if (process.argv.includes("--smoke-test")) {
+    const timer = setTimeout(() => {
+      process.exitCode = 1
+      app.quit()
+    }, 15000)
     win.webContents.once("dom-ready", async () => {
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      const result = await win.webContents.executeJavaScript(`
-          document.body.innerText.includes("Dashboard") &&
-          document.body.innerText.includes("Page activity")
-        `)
+      const ok = await win.webContents.executeJavaScript(
+        'document.body.innerText.includes("Dashboard")'
+      )
+      console.log(JSON.stringify({ ok, apiBase: connection.apiBase }))
       clearTimeout(timer)
-      finishSmoke(result)
+      process.exitCode = ok ? 0 : 1
+      app.quit()
     })
-    win.webContents.once("did-fail-load", (_event, code, description) =>
-      finishSmoke(false, `${code}: ${description}`)
-    )
   }
-
-  if (devUrl) {
-    void win.loadURL(devUrl)
-  } else if (fs.existsSync(builtIndex)) {
-    void win.loadFile(builtIndex, { query: { api: apiBase } })
-  } else {
+  if (devMode) {
     void win.loadURL(
-      `http://127.0.0.1:5173/?api=${encodeURIComponent(apiBase)}`
+      "http://127.0.0.1:5173/?api=" + encodeURIComponent(connection.apiBase)
     )
+  } else {
+    void win.loadFile(path.join(frontendRoot, "dist", "index.html"), {
+      query: { api: connection.apiBase },
+    })
   }
 }
 
 app.on("second-instance", () => {
-  quitting = true
-  app.relaunch()
-  app.quit()
-})
-
-app.whenReady().then(async () => {
-  if (!hasSingleInstanceLock) return
-  try {
-    await chooseApiPort()
-    if (!(await apiIsRunning())) {
-      startSidecar()
-    }
-    await waitForApi()
-    createTray()
-    createWindow()
-    if (hasArg("--background")) {
-      win.hide()
-    }
-  } catch (error) {
-    if (hasArg("--smoke-test")) {
-      finishSmoke(false, error.message)
-    } else {
-      dialog.showErrorBox("Resolve Time Tracker", error.message)
-      app.quit()
-    }
+  if (win) {
+    if (win.isMinimized()) win.restore()
+    win.show()
+    win.focus()
   }
-
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
+})
+app.whenReady().then(async () => {
+  if (!single) return
+  try {
+    connection = await connectRuntime({ db, pid: process.pid, startSidecar })
+    if (quitting) {
+      await connection.release()
+      return
     }
-  })
+    createWindow()
+  } catch (error) {
+    dialog.showErrorBox(appName, lastSidecarError || error.message)
+    app.quit()
+  }
 })
-
-app.on("window-all-closed", () => {
-  // The tray owns the background tracker lifecycle.
-})
-
-app.on("before-quit", () => {
+app.on("window-all-closed", () => app.quit())
+app.on("before-quit", (event) => {
   quitting = true
-  clearInterval(trayTimer)
-  clearTimeout(sidecarRestartTimer)
-  stopSidecar()
+  if (released) return
+  event.preventDefault()
+  released = true
+  Promise.resolve(connection?.release())
+    .catch(() => {})
+    .finally(() => {
+      child?.stderr?.destroy()
+      app.quit()
+    })
 })

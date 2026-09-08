@@ -142,6 +142,19 @@ class CachedActivityProbe:
 
 
 class WindowsActivityProbe:
+    def snapshot(self) -> ActivityState:
+        try:
+            idle = self.idle_seconds()
+            if idle is None:
+                return ActivityState(
+                    None, None, "Windows activity detection is unavailable"
+                )
+            return ActivityState(idle, self.resolve_is_foreground())
+        except OSError:
+            return ActivityState(
+                None, None, "Windows activity detection is unavailable"
+            )
+
     def idle_seconds(self) -> float | None:
         last_input = LASTINPUTINFO()
         last_input.cbSize = ctypes.sizeof(last_input)
@@ -152,6 +165,12 @@ class WindowsActivityProbe:
         return elapsed_ms / 1000
 
     def foreground_window_title(self) -> str:
+        ctypes.windll.user32.GetForegroundWindow.restype = wintypes.HWND
+        ctypes.windll.user32.GetWindowTextW.argtypes = [
+            wintypes.HWND,
+            wintypes.LPWSTR,
+            ctypes.c_int,
+        ]
         hwnd = ctypes.windll.user32.GetForegroundWindow()
         title = ctypes.create_unicode_buffer(512)
         ctypes.windll.user32.GetWindowTextW(hwnd, title, len(title))

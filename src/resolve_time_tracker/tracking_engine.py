@@ -15,10 +15,11 @@ class RuntimeSnapshot:
     page: str | None
     is_rendering: bool
     idle_seconds: float | None
-    resolve_is_foreground: bool
+    resolve_is_foreground: bool | None
     timeline_name: str | None = None
     timeline_id: str | None = None
     timecode: str | None = None
+    activity_unavailable_reason: str | None = None
 
 
 class TrackingEngine:
@@ -50,13 +51,26 @@ class TrackingEngine:
     def tracking_enabled(self) -> bool:
         return self._tracking_enabled
 
-    def poll(self, observed_at: datetime) -> RuntimeSnapshot:
+    def read_snapshot(self) -> RuntimeSnapshot:
+        return self._snapshot_provider.snapshot()
+
+    def poll(
+        self, observed_at: datetime, snapshot: RuntimeSnapshot | None = None
+    ) -> RuntimeSnapshot:
         if not self._tracking_enabled:
             self._close(observed_at)
             self._previous_idle = None
             return self._previous or RuntimeSnapshot(None, None, False, None, False)
 
-        snapshot = self._snapshot_provider.snapshot()
+        snapshot = snapshot or self.read_snapshot()
+        if (
+            snapshot.activity_unavailable_reason
+            or snapshot.resolve_is_foreground is None
+        ):
+            self._store.recover_active_session()
+            self._previous = None
+            self._previous_idle = None
+            return snapshot
         previous = self._previous
         idle_now = (
             snapshot.idle_seconds is not None
@@ -168,8 +182,6 @@ class TrackingEngine:
             page=self._page,
             activity_category="rendering" if self._is_rendering else "editing",
         )
-        self._last_heartbeat_at = None
 
     def _close(self, observed_at: datetime) -> None:
         self._store.close_active_session(observed_at)
-        self._last_heartbeat_at = None

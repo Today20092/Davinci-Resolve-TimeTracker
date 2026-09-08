@@ -8,12 +8,71 @@ import install
 
 
 class BootstrapInstallTest(unittest.TestCase):
+    def test_failed_new_install_removes_only_new_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            data = root / "tracker.sqlite3"
+            data.write_bytes(b"existing history")
+
+            def clone(target, *_):
+                target.mkdir()
+                (target / "partial").touch()
+
+            with (
+                patch("install.ensure_source", side_effect=clone),
+                self.assertRaises(RuntimeError),
+            ):
+                with install.preserve_source(source, "unused", False):
+                    raise RuntimeError("dependency install failed")
+            self.assertFalse(source.exists())
+            self.assertEqual(b"existing history", data.read_bytes())
+
+    def test_failed_build_restores_prior_environment(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            original = root / ".venv" / "old"
+            original.parent.mkdir()
+            original.write_text("working")
+            with self.assertRaises(RuntimeError):
+                with install.preserve_build(root):
+                    self.assertFalse(original.exists())
+                    generated = root / "frontend" / "dist"
+                    generated.mkdir(parents=True)
+                    (generated / "broken").touch()
+                    raise RuntimeError("build failed")
+            self.assertEqual("working", original.read_text())
+            self.assertFalse((root / "frontend" / "dist").exists())
+
+    def test_partial_backup_failure_never_deletes_untouched_environment(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = [root / ".venv", root / "frontend" / "node_modules"]
+            for directory in paths:
+                directory.mkdir(parents=True)
+                (directory / "old").write_text("working")
+            rename = Path.rename
+
+            def fail_second(source, target):
+                if source == paths[1]:
+                    raise PermissionError("directory is in use")
+                return rename(source, target)
+
+            with (
+                patch.object(Path, "rename", fail_second),
+                self.assertRaises(PermissionError),
+            ):
+                with install.preserve_build(root):
+                    self.fail("must not start the build")
+            for directory in paths:
+                self.assertEqual("working", (directory / "old").read_text())
+
     def test_preflight_reports_missing_external_tools(self):
         with patch("install.shutil.which", return_value=None):
             self.assertEqual(
                 [
                     "Git is required to download the project source.",
-                    "Node.js with npm is required to build the desktop app.",
+                    "Node.js with pnpm is required to build the desktop app.",
                 ],
                 install.prerequisite_errors(Path("missing-source")),
             )
@@ -72,7 +131,7 @@ class BootstrapInstallTest(unittest.TestCase):
             target = Path(tmp) / "ResolveTimeTrackerMenu.py"
             source.mkdir()
             target.write_text(
-                f'REPO_ROOT = Path(r"{source.resolve()}")\n"--companion"\n',
+                f'REPO_ROOT = Path(r"{source.resolve()}")\n"--tracked-launch"\n',
                 encoding="utf-8",
             )
 
@@ -99,7 +158,7 @@ class BootstrapInstallTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "install.ps1"):
                 install.ensure_uv()
 
-    def test_install_frontend_runs_npm_ci_and_build(self):
+    def test_install_frontend_uses_frozen_pnpm_lockfile(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp)
             frontend = source / "frontend"
@@ -107,15 +166,16 @@ class BootstrapInstallTest(unittest.TestCase):
             (frontend / "package.json").write_text("{}", encoding="utf-8")
 
             with (
-                patch("shutil.which", return_value="npm"),
+                patch("shutil.which", return_value="pnpm"),
                 patch("install.run") as run,
             ):
                 install.install_frontend(source)
 
         self.assertEqual(
             [
-                call(["npm", "ci"], cwd=frontend),
-                call(["npm", "run", "build"], cwd=frontend),
+                call(["pnpm", "install", "--frozen-lockfile"], cwd=frontend),
+                call(["pnpm", "exec", "electron", "--version"], cwd=frontend),
+                call(["pnpm", "run", "build"], cwd=frontend),
             ],
             run.mock_calls,
         )
@@ -157,24 +217,6 @@ class BootstrapInstallTest(unittest.TestCase):
             run.mock_calls,
         )
 
-    def test_startup_choice_defaults_to_manual_without_tty(self):
-        with patch("sys.stdin.isatty", return_value=False):
-            self.assertEqual("manual", install.choose_startup_mode())
-
-    def test_startup_choice_accepts_yes_for_auto_start(self):
-        with (
-            patch("sys.stdin.isatty", return_value=True),
-            patch("builtins.input", return_value="yes"),
-        ):
-            self.assertEqual("auto", install.choose_startup_mode())
-
-    def test_startup_choice_accepts_no_for_manual_menu_start(self):
-        with (
-            patch("sys.stdin.isatty", return_value=True),
-            patch("builtins.input", return_value="no"),
-        ):
-            self.assertEqual("manual", install.choose_startup_mode())
-
     def test_confirm_install_requires_yes_when_interactive(self):
         with (
             patch("sys.stdin.isatty", return_value=True),
@@ -187,38 +229,62 @@ class BootstrapInstallTest(unittest.TestCase):
         ):
             self.assertTrue(install.confirm_install())
 
-    def test_installs_windows_startup_script(self):
+    def test_launchers_replace_legacy_startup_without_touching_data(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            source = root / "source"
-            source.mkdir()
-            python = source / ".venv" / "Scripts" / "python.exe"
+            python = root / ".venv/Scripts/pythonw.exe"
             python.parent.mkdir(parents=True)
-            python.write_text("", encoding="utf-8")
+            python.touch()
+            legacy = root / "Startup" / install.STARTUP_SCRIPT_NAME
+            legacy.parent.mkdir()
+            legacy.write_text("old startup")
+            data = root / "tracker.sqlite3"
+            data.write_bytes(b"database and saved settings")
+            targets = [
+                root / "Programs/Tracked.lnk",
+                root / "Desktop/Tracked.lnk",
+                root / "Programs/Dashboard.lnk",
+            ]
+            scripts = []
+
+            def save(command, **kwargs):
+                import base64
+
+                scripts.append(base64.b64decode(command[-1]).decode("utf-16-le"))
+                targets[len(scripts) - 1].write_bytes(b"shortcut")
 
             with (
                 patch("platform.system", return_value="Windows"),
-                patch.dict(os.environ, {"APPDATA": str(root / "roaming")}),
+                patch("install.windows_launcher_paths", return_value=targets),
+                patch("install.windows_startup_dir", return_value=legacy.parent),
+                patch("install.run", side_effect=save),
             ):
-                target = install.install_startup(source, python)
+                self.assertEqual(targets, install.install_launchers(root))
+            self.assertEqual(3, len(scripts))
+            self.assertIn("--tracked-launch", scripts[0])
+            self.assertIn("--tracked-launch", scripts[1])
+            self.assertIn("--companion", scripts[2])
+            self.assertFalse(legacy.exists())
+            self.assertEqual(b"database and saved settings", data.read_bytes())
 
-            text = target.read_text(encoding="utf-8")
-            self.assertEqual(install.STARTUP_SCRIPT_NAME, target.name)
-            self.assertIn("ResolveTimeTracker.py", text)
-            self.assertIn("--companion --background", text)
-            self.assertNotIn("--tracker", text)
-
-    def test_electron_connects_to_existing_sidecar_before_spawning(self):
-        root = Path(__file__).resolve().parents[1]
-        text = (root / "frontend" / "electron" / "main.cjs").read_text()
-
-        self.assertIn("async function apiIsRunning", text)
-        self.assertIn("async function apiSupportsPdf", text)
-        self.assertIn('"reportlab"', text)
-        self.assertIn("if (!(await apiIsRunning()))", text)
-        self.assertIn("startSidecar()", text)
-        self.assertIn("app.requestSingleInstanceLock()", text)
-        self.assertIn('app.on("second-instance"', text)
+    def test_failed_launcher_attempt_restores_old_and_removes_only_new_artifacts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            old, new, data = (
+                root / "old.lnk",
+                root / "new.lnk",
+                root / "tracker.sqlite3",
+            )
+            old.write_bytes(b"previous launcher")
+            data.write_bytes(b"saved data")
+            with self.assertRaisesRegex(RuntimeError, "failed"):
+                with install.preserve_launchers([old, new]):
+                    old.write_bytes(b"replacement")
+                    new.write_bytes(b"partial")
+                    raise RuntimeError("failed")
+            self.assertEqual(b"previous launcher", old.read_bytes())
+            self.assertFalse(new.exists())
+            self.assertEqual(b"saved data", data.read_bytes())
 
     def test_uv_command_honors_bootstrap_env_path(self):
         with patch.dict(os.environ, {"RESOLVE_TIME_TRACKER_UV": "/tmp/uv"}):

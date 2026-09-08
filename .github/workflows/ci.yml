@@ -6,13 +6,15 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install uv
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.13'
       - name: Sync
         run: uv sync --dev
       - name: Format
@@ -20,4 +22,19 @@ jobs:
       - name: Lint
         run: uv run ruff check .
       - name: Test
-        run: uv run -m unittest discover -s tests
+        run: uv run -m pytest -q
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+      - name: Frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: Frontend checks
+        working-directory: frontend
+        run: |
+          pnpm test
+          pnpm run lint
+          pnpm run build

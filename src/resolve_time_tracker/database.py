@@ -358,7 +358,8 @@ class SQLiteStore:
                 """
             )
             columns = {
-                row["name"] for row in self._connection.execute("PRAGMA table_info(settings)")
+                row["name"]
+                for row in self._connection.execute("PRAGMA table_info(settings)")
             }
             if "resolve_executable" not in columns:
                 self._connection.execute(

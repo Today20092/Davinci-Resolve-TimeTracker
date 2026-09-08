@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import base64
+from contextlib import contextmanager
 import os
 import platform
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -48,9 +51,9 @@ def prerequisite_errors(source_dir: Path) -> list[str]:
     errors = []
     if not is_source_checkout(source_dir) and shutil.which("git") is None:
         errors.append("Git is required to download the project source.")
-    npm = "npm.cmd" if os.name == "nt" else "npm"
-    if shutil.which(npm) is None:
-        errors.append("Node.js with npm is required to build the desktop app.")
+    pnpm = "pnpm.cmd" if os.name == "nt" else "pnpm"
+    if shutil.which(pnpm) is None:
+        errors.append("Node.js with pnpm is required to build the desktop app.")
     return errors
 
 
@@ -86,6 +89,34 @@ def uv_command() -> list[str] | None:
     except (subprocess.CalledProcessError, OSError):
         return None
     return [sys.executable, "-m", "uv"]
+
+
+@contextmanager
+def preserve_source(source_dir: Path, repo_url: str, update: bool):
+    target = source_dir.resolve()
+    existed = target.exists()
+    previous_head = None
+    git = shutil.which("git")
+    if update and existed and git and (target / ".git").exists():
+        if run([git, "status", "--porcelain"], cwd=target).strip():
+            raise RuntimeError(
+                "The source checkout has local changes. Save them before upgrading."
+            )
+        previous_head = run([git, "rev-parse", "HEAD"], cwd=target).strip()
+    try:
+        ensure_source(target, repo_url, update)
+        yield
+    except BaseException:
+        if previous_head and git:
+            # --keep refuses to overwrite local changes made during the attempt.
+            run([git, "reset", "--keep", previous_head], cwd=target)
+        elif not existed and target.is_dir():
+            if target.is_symlink() or target.resolve() != source_dir.resolve():
+                raise RuntimeError(
+                    f"Refusing to remove changed installation path: {target}"
+                )
+            shutil.rmtree(target)
+        raise
 
 
 def ensure_uv() -> list[str]:
@@ -147,55 +178,84 @@ def windows_startup_dir() -> Path:
     )
 
 
-def install_startup(source_dir: Path, python: Path | None = None) -> Path:
+def windows_launcher_paths() -> list[Path]:
+    programs = windows_startup_dir().parent
+    desktop = Path.home() / "Desktop"
+    if os.name == "nt":
+        import winreg
+
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders",
+        ) as key:
+            desktop = Path(os.path.expandvars(winreg.QueryValueEx(key, "Desktop")[0]))
+    return [
+        programs / "DaVinci Resolve + Time Tracker.lnk",
+        desktop / "DaVinci Resolve + Time Tracker.lnk",
+        programs / "Resolve Time Tracker Dashboard.lnk",
+    ]
+
+
+@contextmanager
+def preserve_launchers(paths: list[Path]):
+    previous = {p: p.read_bytes() if p.is_file() else None for p in paths}
+    try:
+        yield
+    except BaseException:
+        for target, content in previous.items():
+            if content is None:
+                target.unlink(missing_ok=True)
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(content)
+        raise
+
+
+def install_launchers(source_dir: Path) -> list[Path]:
     if platform.system() != "Windows":
-        raise RuntimeError(
-            "Background auto-start is currently only installed on Windows"
-        )
-    if python is None and os.name == "nt":
-        pythonw = source_dir / ".venv" / "Scripts" / "pythonw.exe"
-        python = pythonw if pythonw.exists() else None
-    python = python or venv_python(source_dir)
+        return []
+    python = source_dir / ".venv" / "Scripts" / "pythonw.exe"
+    if not python.is_file():
+        python = venv_python(source_dir)
     if python is None:
-        raise RuntimeError(
-            f"uv sync did not create a virtualenv Python under {source_dir / '.venv'}"
-        )
-    startup_dir = windows_startup_dir()
-    startup_dir.mkdir(parents=True, exist_ok=True)
-    target = startup_dir / STARTUP_SCRIPT_NAME
-    target.write_text(
-        "\n".join(
-            [
-                "@echo off",
-                f'cd /d "{source_dir.resolve()}"',
-                (
-                    f'start "" /min "{python}" '
-                    f'"{source_dir.resolve() / "scripts" / "ResolveTimeTracker.py"}" '
-                    "--companion --background"
-                ),
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    return target
+        raise RuntimeError("Python environment is missing")
+    targets = windows_launcher_paths()
+    legacy = windows_startup_dir() / STARTUP_SCRIPT_NAME
 
+    def quote(value):
+        return "'" + str(value).replace("'", "''") + "'"
 
-def choose_startup_mode(*, default: str = "manual") -> str:
-    if not sys.stdin.isatty():
-        return default
-    print("Startup behavior:", flush=True)
-    print(
-        "  Yes: start automatically with your computer when DaVinci Resolve is used.",
-        flush=True,
-    )
-    print(
-        "  No: start manually from DaVinci Resolve > Workspace > Scripts > "
-        "ResolveTimeTrackerMenu.",
-        flush=True,
-    )
-    answer = input("Start automatically by default? [y/N]: ").strip().lower()
-    return "auto" if answer in {"y", "yes"} else "manual"
+    with preserve_launchers([*targets, legacy]):
+        for index, target in enumerate(targets):
+            target.parent.mkdir(parents=True, exist_ok=True)
+            arguments = subprocess.list2cmdline(
+                [
+                    str(source_dir.resolve() / "scripts" / "ResolveTimeTracker.py"),
+                    "--companion" if index == 2 else "--tracked-launch",
+                ]
+            )
+            script = (
+                "$ErrorActionPreference='Stop'; "
+                "$shortcut=(New-Object -ComObject WScript.Shell).CreateShortcut("
+                + quote(target)
+                + "); "
+                "$shortcut.TargetPath=" + quote(python) + "; "
+                "$shortcut.Arguments=" + quote(arguments) + "; "
+                "$shortcut.WorkingDirectory=" + quote(source_dir.resolve()) + "; "
+                "$shortcut.Save()"
+            )
+            encoded = base64.b64encode(script.encode("utf-16-le")).decode()
+            run(
+                [
+                    "powershell.exe",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-EncodedCommand",
+                    encoded,
+                ]
+            )
+        legacy.unlink(missing_ok=True)
+    return targets
 
 
 def confirm_install(*, default: bool = True) -> bool:
@@ -212,19 +272,65 @@ def install_frontend(source_dir: Path) -> None:
             "[5/7] No frontend package found; skipping Electron companion.", flush=True
         )
         return
-    npm = shutil.which("npm.cmd" if os.name == "nt" else "npm")
-    if npm is None:
-        raise RuntimeError("npm is required to install the Electron companion")
+    pnpm = shutil.which("pnpm.cmd" if os.name == "nt" else "pnpm")
+    if pnpm is None:
+        raise RuntimeError("pnpm is required to install the Electron companion")
     print("[5/7] Installing and building Electron companion...", flush=True)
-    run([npm, "ci"], cwd=frontend_dir)
-    run([npm, "run", "build"], cwd=frontend_dir)
+    run([pnpm, "install", "--frozen-lockfile"], cwd=frontend_dir)
+    run([pnpm, "exec", "electron", "--version"], cwd=frontend_dir)
+    run([pnpm, "run", "build"], cwd=frontend_dir)
+
+
+@contextmanager
+def preserve_build(source_dir: Path):
+    """Build replacements separately; restore the working environment on failure."""
+    root = source_dir.resolve()
+    targets = [
+        root / ".venv",
+        root / "frontend" / "node_modules",
+        root / "frontend" / "dist",
+    ]
+    for target in targets:
+        if target.is_symlink() or (
+            target.exists() and not target.resolve().is_relative_to(root)
+        ):
+            raise RuntimeError(
+                f"Cannot replace linked installation directory: {target}"
+            )
+    backup_root = Path(tempfile.mkdtemp(prefix=".install-backup-", dir=root))
+    backups = []
+    prepared = False
+    try:
+        for index, target in enumerate(targets):
+            backup = backup_root / str(index)
+            if target.exists():
+                target.rename(backup)
+                backups.append((target, backup))
+        prepared = True
+        yield
+    except BaseException:
+        # If setup itself failed, untouched originals must remain untouched.
+        for target in targets if prepared else [item[0] for item in backups]:
+            if target.exists():
+                if target.is_symlink() or not target.resolve().is_relative_to(root):
+                    raise RuntimeError(
+                        f"Refusing to remove linked build directory: {target}"
+                    )
+                shutil.rmtree(target)
+        for target, backup in backups:
+            backup.rename(target)
+        # A restore failure leaves the backup directory for recovery.
+        shutil.rmtree(backup_root)
+        raise
+    else:
+        shutil.rmtree(backup_root)
 
 
 def verify_menu_script(target: Path, source_dir: Path) -> None:
     if not target.is_file():
         raise RuntimeError(f"Resolve menu script was not created: {target}")
     text = target.read_text(encoding="utf-8")
-    if str(source_dir.resolve()) not in text or "--companion" not in text:
+    if str(source_dir.resolve()) not in text or "--tracked-launch" not in text:
         raise RuntimeError(
             f"Resolve menu script does not point at this checkout: {target}"
         )
@@ -238,6 +344,7 @@ def run(command: list[str], *, cwd: Path | None = None) -> str:
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
     return completed.stdout
 
@@ -257,7 +364,7 @@ def parse_args() -> argparse.Namespace:
         "--startup",
         choices=["ask", "manual", "auto"],
         default="ask",
-        help="Startup behavior; ask defaults to manual in non-interactive installs",
+        help="Legacy option, ignored: tracking now starts only with Tracked Launch",
     )
     return parser.parse_args()
 
@@ -266,9 +373,6 @@ def main() -> int:
     args = parse_args()
     installer_path = Path(__file__)
     source_dir = source_dir_for(installer_path, args.source_dir)
-    update_source = args.source_dir is None and not is_source_checkout(
-        installer_path.resolve().parent
-    )
     print("Plan:", flush=True)
     print(f"  - Source checkout: {source_dir}", flush=True)
     print(
@@ -276,7 +380,11 @@ def main() -> int:
         flush=True,
     )
     print("  - Install the DaVinci Resolve Scripts menu entry.", flush=True)
-    print("  - Ask before enabling background auto-start.", flush=True)
+    print("  - Close Resolve and the dashboard before replacing the build.", flush=True)
+    print(
+        "  - Create Tracked Launch and dashboard shortcuts; remove legacy startup.",
+        flush=True,
+    )
     print("", flush=True)
     errors = prerequisite_errors(source_dir)
     if errors:
@@ -284,22 +392,35 @@ def main() -> int:
     if not confirm_install():
         print("Install cancelled.")
         return 0
-    ensure_source(source_dir, args.repo_url, update_source)
-    uv = ensure_uv()
-    install_frontend(source_dir)
-    target = install_menu(source_dir, uv, args.utility_dir)
-    startup_mode = choose_startup_mode() if args.startup == "ask" else args.startup
-    startup_target = None
-    if startup_mode == "auto":
-        startup_target = install_startup(source_dir)
+    update_source = args.source_dir is None and not is_source_checkout(
+        installer_path.resolve().parent
+    )
+    with preserve_source(source_dir, args.repo_url, update_source):
+        uv = ensure_uv()
+        sys.path.insert(0, str(source_dir))
+        from scripts.install_resolve_menu import (
+            default_utility_dir,
+            MENU_SCRIPT_NAME,
+            DEV_MENU_SCRIPT_NAME,
+        )
+
+        utility = args.utility_dir or default_utility_dir()
+        artifacts = [utility / MENU_SCRIPT_NAME, utility / DEV_MENU_SCRIPT_NAME]
+        if platform.system() == "Windows":
+            artifacts += [
+                *windows_launcher_paths(),
+                windows_startup_dir() / STARTUP_SCRIPT_NAME,
+            ]
+        with preserve_launchers(artifacts), preserve_build(source_dir):
+            install_frontend(source_dir)
+            target = install_menu(source_dir, uv, args.utility_dir)
+            launchers = install_launchers(source_dir)
     print(f"Source: {source_dir}")
     print(f"Resolve menu script: {target}")
-    if startup_target is None:
-        print("Startup: manual only")
-        print("Open Resolve, then run Workspace > Scripts > ResolveTimeTrackerMenu")
-    else:
-        print(f"Startup: {startup_target}")
-        print("Resolve Time Tracker will start with your computer.")
+    for launcher in launchers:
+        print(f"Shortcut: {launcher}")
+    print("Use DaVinci Resolve + Time Tracker to start editing with tracking.")
+    print("Open Resolve Time Tracker Dashboard for reports. Nothing starts at login.")
     return 0
 
 

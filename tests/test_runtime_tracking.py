@@ -45,7 +45,9 @@ class RuntimeTrackingTest(unittest.TestCase):
                 return RuntimeSnapshot("Project A", "cut", False, 0, True)
 
         with tempfile.TemporaryDirectory() as tmp:
-            with SQLiteStore(Path(tmp) / "tracker.sqlite3", check_same_thread=False) as store:
+            with SQLiteStore(
+                Path(tmp) / "tracker.sqlite3", check_same_thread=False
+            ) as store:
                 provider = SlowProvider()
                 runtime = TrackingRuntime(
                     TrackingEngine(store, snapshot_provider=provider),
@@ -67,7 +69,9 @@ class RuntimeTrackingTest(unittest.TestCase):
                         RuntimeSnapshot("Project A", "cut", False, 0, True),
                     ]
                 )
-                runtime = TrackingRuntime(TrackingEngine(store, snapshot_provider=provider))
+                runtime = TrackingRuntime(
+                    TrackingEngine(store, snapshot_provider=provider)
+                )
 
                 runtime.observe(utc(10))
                 runtime.observe(utc(10, 5))

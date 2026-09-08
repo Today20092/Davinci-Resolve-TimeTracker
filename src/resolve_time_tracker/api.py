@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import asyncio
+from contextlib import asynccontextmanager
 import os
 import platform
 import sys
@@ -61,6 +63,7 @@ class ApiState:
         now: Now | None = None,
     ):
         self.store = store
+        self.read_only = False
         self.tracking_engine = tracking_engine
         self.tracking_runtime = tracking_runtime or (
             TrackingRuntime(tracking_engine, now=now) if tracking_engine else None
@@ -114,12 +117,14 @@ class ApiState:
 
     def pause(self) -> dict[str, Any]:
         with self.lock:
+            self._require_writable()
             if self.tracking_runtime is not None:
                 self.tracking_runtime.pause(self.now())
             return self._status_unlocked()
 
     def resume(self) -> dict[str, Any]:
         with self.lock:
+            self._require_writable()
             if self.tracking_runtime is not None:
                 self.tracking_runtime.resume()
             return self._status_unlocked()
@@ -154,6 +159,7 @@ class ApiState:
 
     def update_settings(self, update: SettingsUpdate) -> dict[str, Any]:
         with self.lock:
+            self._require_writable()
             try:
                 self.store.set_idle_timeout_seconds(update.idle_timeout_seconds)
             except ValueError as exc:
@@ -162,6 +168,7 @@ class ApiState:
 
     def update_session(self, session_id: int, update: SessionUpdate) -> dict[str, Any]:
         with self.lock:
+            self._require_writable()
             try:
                 self.store.update_session(
                     session_id,
@@ -173,6 +180,12 @@ class ApiState:
             except ValueError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
             return self._session_by_id_unlocked(session_id)
+
+    def _require_writable(self) -> None:
+        if self.read_only:
+            raise HTTPException(
+                409, "Open DaVinci Resolve + Time Tracker to change tracking data."
+            )
 
     def csv(self) -> str:
         with self.lock:
@@ -233,7 +246,7 @@ class ApiState:
             else None
         )
         status = {
-            "connection": "connected",
+            "connection": "reporting" if self.read_only else "connected",
             "tracking_status": "resolve_closed",
             "project": "none",
             "page": "none",
@@ -241,7 +254,7 @@ class ApiState:
             "active_elapsed_seconds": 0,
             "active_elapsed": "0:00:00",
             "heartbeat": "none",
-            "tracking_enabled": True,
+            "tracking_enabled": self.tracking_engine is not None,
             "db_path": str(self.store.path),
         }
         if active is not None:
@@ -270,6 +283,9 @@ class ApiState:
             status["page"] = snapshot.page or "none"
             if snapshot.project_name:
                 status["tracking_status"] = "idle"
+            if snapshot.activity_unavailable_reason:
+                status["tracking_status"] = "error"
+                status["heartbeat"] = snapshot.activity_unavailable_reason
         if self.tracking_engine is not None:
             status["tracking_enabled"] = self.tracking_engine.tracking_enabled
             if not self.tracking_engine.tracking_enabled:
@@ -378,7 +394,18 @@ def create_app(
     poll_interval_seconds: float = 5,
 ) -> FastAPI:
     api = ApiState(store, tracking_engine=tracking_engine, now=now)
-    app = FastAPI(title="Resolve Time Tracker")
+
+    @asynccontextmanager
+    async def lifespan(_app):
+        if api.tracking_runtime is not None:
+            api.tracking_runtime.start()
+        try:
+            yield
+        finally:
+            if api.tracking_runtime is not None:
+                api.tracking_runtime.stop()
+
+    app = FastAPI(title="Resolve Time Tracker", lifespan=lifespan)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -386,16 +413,6 @@ def create_app(
         allow_headers=["*"],
     )
     app.state.api = api
-
-    @app.on_event("startup")
-    def start_tracking_runtime() -> None:
-        if api.tracking_runtime is not None:
-            api.tracking_runtime.start()
-
-    @app.on_event("shutdown")
-    def stop_tracking_runtime() -> None:
-        if api.tracking_runtime is not None:
-            api.tracking_runtime.stop()
 
     @app.get("/health")
     def health() -> dict[str, bool]:
@@ -448,8 +465,19 @@ def create_app(
 
     @app.get("/events")
     def events(once: bool = False) -> StreamingResponse:
+        async def stream():
+            revision = None
+            while True:
+                yield _sse("status", api.status())
+                if store.read_model_revision != revision:
+                    revision = store.read_model_revision
+                    yield _sse("dashboard", {})
+                if once:
+                    return
+                await asyncio.sleep(poll_interval_seconds)
+
         return StreamingResponse(
-            api.events(once=once, poll_interval_seconds=poll_interval_seconds),
+            stream(),
             media_type="text/event-stream",
         )
 
