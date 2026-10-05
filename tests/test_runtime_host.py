@@ -130,6 +130,36 @@ class RuntimeHostTest(unittest.TestCase):
             self.assertTrue(host.tick())
             self.assertIsNone(store.active_session())
 
+    def test_failed_tracking_start_restores_reporting_and_allows_retry(self):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            SQLiteStore(Path(tmp) / "db") as store,
+        ):
+            api = ApiState(store)
+            bridge = Provider()
+            host = RuntimeHost(
+                api,
+                alive=lambda _: True,
+                launch=lambda _: 10,
+                bridge_factory=lambda: bridge,
+            )
+            host.attach(20)
+            with patch.object(
+                threading.Thread, "start", side_effect=RuntimeError("no thread")
+            ):
+                with self.assertRaisesRegex(LaunchError, "no thread"):
+                    host.track()
+            self.assertTrue(bridge.closed)
+            self.assertTrue(api.read_only)
+            self.assertIsNone(api.tracking_runtime)
+            self.assertIsNone(api.tracking_engine)
+            self.assertIsNone(host.resolve_pid)
+            self.assertFalse(host.tick())
+            with patch.object(TrackingRuntime, "start"):
+                host.track()
+            self.assertEqual(10, host.resolve_pid)
+            host.stop_tracking()
+
     def test_blocked_observation_cannot_prevent_exit_or_write_after_stop(self):
         entered, release = threading.Event(), threading.Event()
 

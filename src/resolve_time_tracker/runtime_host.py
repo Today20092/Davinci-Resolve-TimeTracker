@@ -68,18 +68,26 @@ class RuntimeHost:
                 if not self.alive(pid):
                     self._release_process(pid)
                     raise LaunchError("DaVinci Resolve closed before tracking started.")
-                if self.bridge_factory is None:
-                    from resolve_time_tracker.resolve_bridge import ResolveBridge
-
-                    self.bridge_factory = ResolveBridge
-                self.bridge = self.bridge_factory()
-                engine = TrackingEngine(self.api.store, snapshot_provider=self.bridge)
-                runtime = TrackingRuntime(engine, lock=self.api.lock)
-                self.api.tracking_engine = engine
-                self.api.tracking_runtime = runtime
-                self.api.read_only = False
                 self.resolve_pid = pid
-                runtime.start()
+                try:
+                    if self.bridge_factory is None:
+                        from resolve_time_tracker.resolve_bridge import ResolveBridge
+
+                        self.bridge_factory = ResolveBridge
+                    self.bridge = self.bridge_factory()
+                    engine = TrackingEngine(
+                        self.api.store, snapshot_provider=self.bridge
+                    )
+                    runtime = TrackingRuntime(engine, lock=self.api.lock)
+                    self.api.tracking_engine = engine
+                    self.api.tracking_runtime = runtime
+                    self.api.read_only = False
+                    runtime.start()
+                except Exception as exc:
+                    self.stop_tracking()
+                    raise LaunchError(
+                        f"Could not start tracking: {exc}. Run Tracked Launch again."
+                    ) from exc
 
     def attach(self, pid):
         with self.lock:
