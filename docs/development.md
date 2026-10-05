@@ -4,7 +4,7 @@
 
 - Git
 - `uv`
-- Node.js with npm
+- Node.js with pnpm, using the version pinned in `frontend/package.json`
 - DaVinci Resolve Studio for live integration testing
 
 The project supports Python 3.10 through 3.13. Installer and development examples use Python 3.13.

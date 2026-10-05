@@ -19,7 +19,7 @@ Resolve Time Tracker is an MIT-licensed, open-source time tracker for DaVinci Re
 
 - DaVinci Resolve Studio. The latest Resolve Studio release is the actively tested target; Windows with Resolve Studio 21 is currently verified.
 - Git, used to download and update the project.
-- Node.js with npm, used to build the desktop app.
+- Node.js with pnpm, used to build the desktop app. The pnpm version is pinned in `frontend/package.json`.
 
 The installer supplies `uv`, Python 3.13, Python packages, and frontend packages. macOS and Linux support is available but still needs broader real-machine testing; see [Platform Support](#platform-support).
 
@@ -54,7 +54,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 The installer downloads the project source, installs Python dependencies, builds the companion app, and adds the DaVinci Resolve menu script.
 It asks whether tracking should stay manual or start automatically with your computer. Manual start is the default.
 
-If Git or Node.js with npm is missing, the installer stops before changing the installation and explains what to install.
+If Git or Node.js with pnpm is missing, the installer stops before changing the installation and explains what to install.
 
 ### What "Start automatically" means
 

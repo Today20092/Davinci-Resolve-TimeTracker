@@ -23,7 +23,7 @@ Install `xprintidle` and `xdotool` with the distribution package manager. Withou
 
 ## The installer reports a missing prerequisite
 
-The installer supplies Python 3.13 and `uv`. Git and Node.js with npm must be installed first:
+The installer supplies Python 3.13 and `uv`. Git and Node.js with pnpm must be installed first. The pnpm version is pinned in `frontend/package.json`:
 
 - [Install Git](https://git-scm.com/downloads)
 - [Install Node.js LTS](https://nodejs.org/en/download)

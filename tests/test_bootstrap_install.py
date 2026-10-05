@@ -13,7 +13,7 @@ class BootstrapInstallTest(unittest.TestCase):
             self.assertEqual(
                 [
                     "Git is required to download the project source.",
-                    "Node.js with npm is required to build the desktop app.",
+                    "Node.js with pnpm is required to build the desktop app.",
                 ],
                 install.prerequisite_errors(Path("missing-source")),
             )
@@ -99,7 +99,7 @@ class BootstrapInstallTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "install.ps1"):
                 install.ensure_uv()
 
-    def test_install_frontend_runs_npm_ci_and_build(self):
+    def test_install_frontend_uses_frozen_pnpm_lockfile(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp)
             frontend = source / "frontend"
@@ -107,15 +107,15 @@ class BootstrapInstallTest(unittest.TestCase):
             (frontend / "package.json").write_text("{}", encoding="utf-8")
 
             with (
-                patch("shutil.which", return_value="npm"),
+                patch("shutil.which", return_value="pnpm"),
                 patch("install.run") as run,
             ):
                 install.install_frontend(source)
 
         self.assertEqual(
             [
-                call(["npm", "ci"], cwd=frontend),
-                call(["npm", "run", "build"], cwd=frontend),
+                call(["pnpm", "install", "--frozen-lockfile"], cwd=frontend),
+                call(["pnpm", "run", "build"], cwd=frontend),
             ],
             run.mock_calls,
         )

@@ -48,9 +48,9 @@ def prerequisite_errors(source_dir: Path) -> list[str]:
     errors = []
     if not is_source_checkout(source_dir) and shutil.which("git") is None:
         errors.append("Git is required to download the project source.")
-    npm = "npm.cmd" if os.name == "nt" else "npm"
-    if shutil.which(npm) is None:
-        errors.append("Node.js with npm is required to build the desktop app.")
+    pnpm = "pnpm.cmd" if os.name == "nt" else "pnpm"
+    if shutil.which(pnpm) is None:
+        errors.append("Node.js with pnpm is required to build the desktop app.")
     return errors
 
 
@@ -212,12 +212,12 @@ def install_frontend(source_dir: Path) -> None:
             "[5/7] No frontend package found; skipping Electron companion.", flush=True
         )
         return
-    npm = shutil.which("npm.cmd" if os.name == "nt" else "npm")
-    if npm is None:
-        raise RuntimeError("npm is required to install the Electron companion")
+    pnpm = shutil.which("pnpm.cmd" if os.name == "nt" else "pnpm")
+    if pnpm is None:
+        raise RuntimeError("pnpm is required to install the Electron companion")
     print("[5/7] Installing and building Electron companion...", flush=True)
-    run([npm, "ci"], cwd=frontend_dir)
-    run([npm, "run", "build"], cwd=frontend_dir)
+    run([pnpm, "install", "--frozen-lockfile"], cwd=frontend_dir)
+    run([pnpm, "run", "build"], cwd=frontend_dir)
 
 
 def verify_menu_script(target: Path, source_dir: Path) -> None:
