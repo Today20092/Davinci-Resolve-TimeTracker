@@ -6,10 +6,14 @@ Resolve Time Tracker will add a prebuilt, per-user Windows package for regular u
 
 - Versioned installers will be downloaded manually from GitHub Releases; automatic updates are deferred.
 - Start Menu and Resolve Scripts menu entry points will open the same single-instance application.
-- Automatic startup will remain opt-in during installation and configurable later from the Electron UI.
-- Upgrades will preserve data, settings, and startup preference, close and restore a running tracker cleanly, and roll back application and database changes on failure.
+- Installation will create a Tracked Launch that starts DaVinci Resolve and tracking together, plus a separate dashboard launcher. No tracker will start automatically at login or remain resident between Resolve sessions.
+- Upgrades will remove legacy automatic-startup entries, recreate the launchers, and preserve any valid saved Resolve executable path.
+- If Resolve is not installed or its saved path is invalid, installation still succeeds and the first Tracked Launch asks the user to locate `Resolve.exe`.
+- A user-selected Resolve executable path is stored with existing per-user settings, preserved across upgrades, and validated before each Tracked Launch; no separate configuration file or registry entry is introduced.
+- Upgrades will preserve data and settings, remove the old startup preference, and roll back application and database changes on failure. Close Resolve and the dashboard before updating.
 - Existing script installations will reuse their database and settings, replace installed launchers, and leave any source checkout untouched.
 - Native uninstall will remove application and integration files while preserving data and settings by default. Permanent data deletion requires a separate explicit choice.
+- A failed installation attempt rolls back only artifacts created by that attempt; it never removes existing data or a previously working installation.
 
 ## Release constraints
 

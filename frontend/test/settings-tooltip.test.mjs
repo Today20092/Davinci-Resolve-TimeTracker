@@ -21,14 +21,9 @@ test("settings expose desktop preferences", async () => {
 
   for (const label of [
     "System",
-    "Start minimized to tray",
-    "Keep running in tray",
-    "Quit tracker",
     "Open data folder",
   ]) {
     assert.match(app, new RegExp(label))
   }
-  assert.match(main, /startupEnabled/)
-  assert.match(main, /closeBehavior === "tray"/)
   assert.match(main, /shell\.showItemInFolder/)
 })

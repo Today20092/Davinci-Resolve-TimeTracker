@@ -25,7 +25,7 @@ The installer supplies `uv`, Python 3.13, Python packages, and frontend packages
 
 ## Install
 
-Resolve Time Tracker installs as a DaVinci Resolve Scripts-menu tool. After install, open Resolve and run:
+On Windows, use the installed **DaVinci Resolve + Time Tracker** shortcut to start Resolve with tracking. Use the separate **Resolve Time Tracker Dashboard** shortcut to view saved time and reports. To attach tracking to an already-open Resolve session, run:
 
 ```text
 Workspace > Scripts > ResolveTimeTrackerMenu
@@ -51,19 +51,17 @@ If Windows blocks `install.ps1`, open PowerShell in your Downloads folder and ru
 powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-The installer downloads the project source, installs Python dependencies, builds the companion app, and adds the DaVinci Resolve menu script.
-It asks whether tracking should stay manual or start automatically with your computer. Manual start is the default.
+The installer downloads the project source, installs Python dependencies, builds the dashboard, and adds the DaVinci Resolve menu script. Windows installation also creates the tracking and dashboard shortcuts and removes legacy tracker login-startup entries.
 
 If Git or Node.js with pnpm is missing, the installer stops before changing the installation and explains what to install.
 
-### What "Start automatically" means
+### When the tracker runs
 
-This choice currently applies to Windows:
+Tracking starts when you use the tracked Resolve shortcut or Resolve's Scripts menu. There is no login-startup process or watcher waiting for Resolve to open.
 
-- **Yes:** the installer adds `ResolveTimeTrackerBackground.cmd` to your Windows Startup folder. Each time you sign in, Windows starts a hidden Python process that runs the tracker's local API and checks Resolve activity. The process stays in memory while you are signed in, including on days when you do not open Resolve. It should do little work when unused, but it does use some RAM. It does not open the Electron window automatically.
-- **No (default):** the installer does not add anything to Windows Startup. No Resolve Time Tracker process runs after sign-in. Start it only when needed from `Workspace > Scripts > ResolveTimeTrackerMenu` in DaVinci Resolve.
+The headless runtime records the Resolve session without an Electron window. Opening the dashboard connects to that runtime. If tracking has not started, the dashboard opens saved data without starting tracking.
 
-Choosing Yes does not give the tracker control of your computer. It only starts the same local tracker automatically and keeps its API on `127.0.0.1` (your computer only). The tracker records project timing and activity state; it does not record keystrokes, mouse coordinates, screen contents, footage, or media contents.
+Closing the dashboard exits Electron. Tracking continues while the tracked Resolve session is open. After Resolve closes, the runtime remains only if the dashboard is still open; closing both ends the runtime. Nothing remains running between sessions. Ordinary dashboard launches use the installed build without running pnpm or rebuilding assets.
 
 For Linux activity detection, install `xprintidle` and `xdotool` with your distro package manager. Without them, the tracker can still run, but it falls back to always-active tracking.
 
@@ -98,19 +96,19 @@ Download and run the uninstaller for your platform:
 sh uninstall.sh
 ```
 
-Quit Resolve Time Tracker from its tray menu first. The uninstaller shows every location it will remove and asks for confirmation. It separately asks whether to permanently delete `tracker.sqlite3`; choosing No preserves all tracked projects and time.
+Close Resolve and the dashboard first. The uninstaller shows every location it will remove and asks for confirmation. It separately asks whether to permanently delete `tracker.sqlite3`; choosing No preserves all tracked projects and time.
 
 ## Use
 
-Open Resolve and run:
+On Windows, start **DaVinci Resolve + Time Tracker**. If Resolve is already open, attach tracking with:
 
 ```text
 Workspace > Scripts > ResolveTimeTrackerMenu
 ```
 
-The companion window shows whether time is being recorded, the open Resolve project and page, saved work sessions, settings, and report exports. Use **Pause Tracking** to stop the timer manually and **Resume Tracking** to start it again.
+Open **Resolve Time Tracker Dashboard** to see whether time is being recorded, the open Resolve project and page, saved work sessions, settings, and report exports. Use **Pause Tracking** to stop the timer manually and **Resume Tracking** to start it again.
 
-If you opted into background startup during install, the tracker starts in the Windows system tray and records Resolve activity even when the companion window is closed. Green means time is actively being recorded, yellow means idle or paused, gray means Resolve is closed, and red means the tracker is disconnected.
+The dashboard alone does not start tracking. Starting Resolve through its ordinary shortcut also does not start tracking; use the tracked shortcut or Scripts menu for sessions you want recorded.
 
 CSV export writes closed sessions only. Open active sessions are exported after they close.
 
@@ -150,6 +148,8 @@ These screenshots use sample project data to show the companion app pages.
 - Exports closed sessions to CSV.
 - Never records keystrokes, mouse coordinates, screen contents, footage, or media contents.
 
+Automated performance checks use synthetic activity and lifecycle scenarios. They do not measure CPU or memory during a real Resolve editing session.
+
 Default data file:
 
 ```text
@@ -187,7 +187,7 @@ but not Resolve project names or tracking history.
 Both diagrams use the same visual language:
 
 - **Orange:** where the user starts an action.
-- **Blue:** DaVinci Resolve or an operating-system startup path.
+- **Blue:** DaVinci Resolve.
 - **Green:** the desktop app and results visible to the user.
 - **Purple:** background work performed by the tracker.
 - **Pink:** data stored privately on the computer.
@@ -199,9 +199,9 @@ How Resolve, the desktop companion, the local Python sidecar, and local storage 
 
 ```mermaid
 flowchart TD
-  Menu["You choose the tracker<br/>from Resolve's Scripts menu"] --> App["Desktop app<br/>dashboard window + system tray"]
-  Login["Windows starts it at sign-in<br/>if you enabled automatic startup"] --> App
-  App --> Tracker["Background tracker<br/>keeps the timer running"]
+  Menu["Tracked Resolve shortcut<br/>or Resolve's Scripts menu"] --> Tracker["Headless runtime<br/>tracks this Resolve session"]
+  Dashboard["You open the dashboard"] --> App["Desktop dashboard<br/>saved data without tracking by default"]
+  App <-->|Local API| Tracker
 
   Resolve["DaVinci Resolve<br/>project, page, and render status"] --> Tracker
   Activity["Your computer<br/>active, idle, or Resolve in background"] --> Tracker
@@ -214,7 +214,7 @@ flowchart TD
   Database --> App
   App --> Reports["Dashboard, CSV,<br/>and PDF reports"]
 
-  Note["Closing the dashboard leaves the tracker running in the tray.<br/>Choose Quit from the tray to stop it completely."] -.-> App
+  Note["Dashboard close exits Electron.<br/>Runtime exits when the tracked Resolve session and dashboard have closed."] -.-> App
 
   classDef user fill:#fff7ed,stroke:#f97316,color:#7c2d12
   classDef resolve fill:#eff6ff,stroke:#2563eb,color:#1e3a8a
@@ -222,8 +222,8 @@ flowchart TD
   classDef backend fill:#eef2ff,stroke:#4f46e5,color:#312e81
   classDef data fill:#fdf2f8,stroke:#db2777,color:#831843
 
-  class Menu user
-  class Login,Resolve resolve
+  class Menu,Dashboard user
+  class Resolve resolve
   class App,Reports desktop
   class Tracker,Decision,Activity,Wait backend
   class Database data
@@ -238,17 +238,10 @@ flowchart TD
   Download["Download and run<br/>the installer for your computer"]
   Download --> Prepare["The installer prepares<br/>the tracker and desktop app"]
   Prepare --> Menu["The tracker is added to<br/>Resolve's Scripts menu"]
-  Prepare --> Choice{"Start tracking automatically<br/>when you sign in to Windows?"}
-
-  Choice -->|No — default| Manual["Nothing runs in the background<br/>until you start it from Resolve"]
-  Choice -->|Yes| Automatic["The tracker starts quietly<br/>in the system tray at sign-in"]
-
-  Manual --> Ready["Installation complete"]
-  Automatic --> Done["Installation complete<br/>tracking starts at next sign-in"]
+  Prepare --> Shortcuts["Windows tracking and dashboard shortcuts<br/>replace legacy login-startup entries"]
+  Shortcuts --> Ready["Installation complete<br/>nothing runs at sign-in"]
   Menu --> Ready
-  Ready --> Use["Open Resolve and choose<br/>Workspace → Scripts → ResolveTimeTrackerMenu"]
-
-  Note["Automatic startup is currently a Windows-only option.<br/>You can always start the tracker manually from Resolve."] -.-> Choice
+  Ready --> Use["Use the tracked Resolve shortcut<br/>or attach from Resolve's Scripts menu"]
 
   classDef bootstrap fill:#fff7ed,stroke:#f97316,color:#7c2d12
   classDef setup fill:#eef2ff,stroke:#4f46e5,color:#312e81
@@ -256,14 +249,15 @@ flowchart TD
 
   class Download bootstrap
   class Prepare setup
-  class Menu,Choice,Manual,Automatic,Ready,Done,Use resolve
+  class Menu,Shortcuts,Ready,Use resolve
 ```
 
 | Area | Files | Responsibility |
 | --- | --- | --- |
-| Plugin entry | `scripts/ResolveTimeTracker.py` | Launches Electron by default, or runs the FastAPI sidecar when Electron requests `--api`. |
+| Plugin entry | `scripts/ResolveTimeTracker.py` | Opens the built dashboard by default; `--tracked-launch` starts or attaches Resolve tracking, and `--api` attaches a dashboard owner to the managed runtime. |
 | Install path | `install.py`, `install.ps1`, `install.sh`, `scripts/install_resolve_menu.py` | Prepares Python and frontend dependencies, then installs the Resolve Scripts-menu launcher. |
-| Interface | `frontend/` | Electron owns the window, tray, sidecar lifecycle, and desktop PDF printing; React, Vite, Tailwind, and shadcn/ui render the dashboard. |
+| Interface | `frontend/` | Electron owns the dashboard window and desktop PDF printing and exits when the window closes; React, Vite, Tailwind, and shadcn/ui render the dashboard. |
+| Runtime lifecycle | `src/resolve_time_tracker/runtime_host.py`, `src/resolve_time_tracker/tracked_launch.py` | Shares one runtime per database while a tracked Resolve session or dashboard owns it. Publishes an ephemeral localhost endpoint in the database's `.runtime.json` file. |
 | Backend API | `src/resolve_time_tracker/api.py` | FastAPI exposes localhost commands, exports, server-sent invalidations, and the complete dashboard read model consumed by React. |
 | Tracking rules | `src/resolve_time_tracker/tracking_engine.py` | Converts Resolve/runtime snapshots into billable Sessions with heartbeats. |
 | Resolve adapter | `src/resolve_time_tracker/resolve_bridge.py` | Reads project, Page, render, timeline, idle, and foreground state. |
@@ -275,7 +269,7 @@ flowchart TD
 
 Local checkouts also install `Workspace > Scripts > ResolveTimeTrackerDevMenu`.
 It starts the Vite development server and Electron with hot reload; use the normal
-`ResolveTimeTrackerMenu` entry for the built app.
+`ResolveTimeTrackerMenu` entry to attach tracking to the current Resolve session. The dashboard shortcut opens the built app.
 
 The [Development Guide](docs/development.md) covers prerequisites, repository structure, local startup, API access, tests, linting, and builds. An AI coding agent can use the copyable [Agentic Development Prompt](docs/agentic-development-prompt.md) to prepare and verify a checkout. See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 

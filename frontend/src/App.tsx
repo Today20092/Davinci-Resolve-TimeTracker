@@ -18,6 +18,7 @@ import {
 } from "@tabler/icons-react"
 
 import {
+  advanceActiveElapsed,
   createSidecarClient,
   formatSidecarError,
   type CurrentProjectDashboard,
@@ -173,10 +174,6 @@ function App() {
   const [idleMinutes, setIdleMinutes] = useState("5")
   const [pdfOptions, setPdfOptions] = useState(defaultPdfOptions)
   const [theme, setTheme] = useState(() => localStorage.theme || "system")
-  const [launchAtStartup, setLaunchAtStartup] = useState(false)
-  const [closeBehavior, setCloseBehavior] = useState<"tray" | "quit">(
-    () => localStorage.closeBehavior || "tray"
-  )
   const [error, setError] = useState<string | null>(null)
   const [supportMessage, setSupportMessage] = useState<string | null>(null)
   const [supportReportText, setSupportReportText] = useState<string | null>(
@@ -227,9 +224,17 @@ function App() {
       setError(formatSidecarError(error))
     })
     return sidecar.watchDashboard({
-      onUpdate: applyDashboard,
+      onDashboard: applyDashboard,
+      onStatus: setStatus,
       onError: (error) => setError(formatSidecarError(error)),
     })
+  }, [])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setStatus(advanceActiveElapsed)
+    }, 1000)
+    return () => window.clearInterval(timer)
   }, [])
 
   useEffect(() => {
@@ -245,24 +250,6 @@ function App() {
     return () => media.removeEventListener("change", applyTheme)
   }, [theme])
 
-  useEffect(() => {
-    if (!window.desktop) return
-    void window.desktop
-      .getSettings()
-      .then(({ launchAtStartup }) => setLaunchAtStartup(launchAtStartup))
-    void window.desktop.setCloseBehavior(closeBehavior)
-  }, [closeBehavior])
-
-  async function changeLaunchAtStartup(enabled: boolean) {
-    if (!window.desktop) return
-    try {
-      setLaunchAtStartup(await window.desktop.setLaunchAtStartup(enabled))
-      setError(null)
-    } catch (error) {
-      setError(formatSidecarError(error))
-    }
-  }
-
   function sortProjects(key: keyof ProjectSummary) {
     setProjectSort((current) => ({
       key,
@@ -271,12 +258,6 @@ function App() {
           ? "descending"
           : "ascending",
     }))
-  }
-
-  function changeCloseBehavior(value: string) {
-    if (value !== "tray" && value !== "quit") return
-    localStorage.closeBehavior = value
-    setCloseBehavior(value)
   }
 
   const totals = useMemo(() => {
@@ -444,6 +425,7 @@ function App() {
           <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
+              disabled={status.connection !== "connected"}
               onClick={() =>
                 runAction(() => sidecar.setTracking(!status.tracking_enabled))
               }
@@ -465,6 +447,13 @@ function App() {
             </Button>
           </div>
         </header>
+
+        {status.connection !== "connected" && (
+          <p className="text-sm text-muted-foreground">
+            Use the DaVinci Resolve + Time Tracker shortcut to start tracking.
+            You can view and export recorded time here.
+          </p>
+        )}
 
         {error && (
           <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -490,8 +479,8 @@ function App() {
                   </EmptyMedia>
                   <EmptyTitle>No Resolve project detected</EmptyTitle>
                   <EmptyDescription>
-                    Open a project in Resolve and the dashboard will switch to
-                    its tracked time.
+                    Start Resolve with the DaVinci Resolve + Time Tracker
+                    shortcut, then open a project to track its time.
                   </EmptyDescription>
                 </EmptyHeader>
               </Empty>
@@ -734,6 +723,7 @@ function App() {
                             size="icon-sm"
                             aria-label="Edit session"
                             onClick={() => startEditing(session)}
+                            disabled={status.connection === "reporting"}
                           >
                             <IconPencil />
                           </Button>
@@ -1045,7 +1035,9 @@ function App() {
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        {"Rendering and exporting continue to count as active work, even after this idle timeout."}
+                        {
+                          "Rendering and exporting continue to count as active work, even after this idle timeout."
+                        }
                       </TooltipContent>
                     </Tooltip>
                   </div>
@@ -1057,7 +1049,10 @@ function App() {
                       value={idleMinutes}
                       onChange={(event) => setIdleMinutes(event.target.value)}
                     />
-                    <Button onClick={saveSettings}>
+                    <Button
+                      onClick={saveSettings}
+                      disabled={status.connection === "reporting"}
+                    >
                       <IconDeviceFloppy data-icon="inline-start" />
                       Save
                     </Button>
@@ -1084,42 +1079,11 @@ function App() {
                   </ToggleGroup>
                   {window.desktop && (
                     <>
-                      <Label htmlFor="startup">Windows startup</Label>
-                      <ToggleGroup
-                        id="startup"
-                        type="single"
-                        value={launchAtStartup ? "on" : "off"}
-                        variant="outline"
-                        spacing={0}
-                        className="w-full"
-                        onValueChange={(value) =>
-                          value && void changeLaunchAtStartup(value === "on")
-                        }
-                      >
-                        <ToggleGroupItem className="flex-1" value="off">
-                          Off
-                        </ToggleGroupItem>
-                        <ToggleGroupItem className="flex-1" value="on">
-                          Start minimized to tray
-                        </ToggleGroupItem>
-                      </ToggleGroup>
-                      <Label htmlFor="close-behavior">When closing</Label>
-                      <ToggleGroup
-                        id="close-behavior"
-                        type="single"
-                        value={closeBehavior}
-                        variant="outline"
-                        spacing={0}
-                        className="w-full"
-                        onValueChange={changeCloseBehavior}
-                      >
-                        <ToggleGroupItem className="flex-1" value="tray">
-                          Keep running in tray
-                        </ToggleGroupItem>
-                        <ToggleGroupItem className="flex-1" value="quit">
-                          Quit tracker
-                        </ToggleGroupItem>
-                      </ToggleGroup>
+                      <p className="text-sm text-muted-foreground">
+                        Use the DaVinci Resolve + Time Tracker shortcut to start
+                        tracking. Closing the dashboard closes it completely;
+                        tracking continues while Resolve is open.
+                      </p>
                       <Label>Data location</Label>
                       <Input value={status.db_path} readOnly />
                       <Button

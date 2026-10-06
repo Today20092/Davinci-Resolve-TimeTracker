@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from resolve_time_tracker.activity_tracker import default_activity_probe
+from resolve_time_tracker.activity_tracker import ActivityState, default_activity_probe
 from resolve_time_tracker.tracking_engine import RuntimeSnapshot
 
 
@@ -54,7 +54,12 @@ class ResolveBridge:
         self._version: str | None = None
 
     def snapshot(self) -> RuntimeSnapshot:
-        resolve = self.resolve()
+        try:
+            resolve = self.resolve()
+        except Exception:
+            self._set_present(False)
+            raise
+        self._set_present(True)
         if self._product_name is None:
             product_name = getattr(resolve, "GetProductName", None)
             version = getattr(resolve, "GetVersionString", None)
@@ -70,24 +75,46 @@ class ResolveBridge:
         timecode = None
 
         if project is not None:
-            project_name = _call(project.GetName)
-            is_rendering = bool(_call(project.IsRenderingInProgress) or False)
+            project_name = project.GetName()
+            is_rendering = bool(project.IsRenderingInProgress())
             timeline = _call(project.GetCurrentTimeline)
             if timeline is not None:
                 timeline_name = _call(timeline.GetName)
                 timeline_id = _call(timeline.GetUniqueId)
                 timecode = _call(timeline.GetCurrentTimecode)
 
+        snapshot = getattr(self.activity_probe, "snapshot", None)
+        activity = (
+            snapshot()
+            if callable(snapshot)
+            else ActivityState(
+                self.activity_probe.idle_seconds(),
+                self.activity_probe.resolve_is_foreground(),
+                getattr(self.activity_probe, "unavailable_reason", None),
+            )
+        )
         return RuntimeSnapshot(
             project_name=project_name,
             page=page,
             is_rendering=is_rendering,
-            idle_seconds=self.activity_probe.idle_seconds(),
-            resolve_is_foreground=self.activity_probe.resolve_is_foreground(),
+            idle_seconds=activity.idle_seconds,
+            resolve_is_foreground=activity.resolve_is_foreground,
+            activity_unavailable_reason=activity.unavailable_reason,
             timeline_name=timeline_name,
             timeline_id=timeline_id,
             timecode=timecode,
         )
+
+    def _set_present(self, present: bool) -> None:
+        setter = getattr(self.activity_probe, "set_resolve_present", None)
+        if callable(setter):
+            setter(present)
+
+    def close(self) -> None:
+        self._set_present(False)
+        close = getattr(self.activity_probe, "close", None)
+        if callable(close):
+            close()
 
     def diagnostics(self) -> dict[str, Any]:
         return {
@@ -96,6 +123,9 @@ class ResolveBridge:
             or self._resolve_object is not None,
             "resolve_product": self._product_name,
             "resolve_version": self._version,
+            "activity_unavailable_reason": getattr(
+                self.activity_probe, "unavailable_reason", None
+            ),
         }
 
     def resolve(self) -> Any:
@@ -121,10 +151,10 @@ class ResolveBridge:
         return self._module
 
     def _current_project(self, resolve: Any) -> Any | None:
-        project_manager = _call(resolve.GetProjectManager)
+        project_manager = resolve.GetProjectManager()
         if project_manager is None:
-            return None
-        return _call(project_manager.GetCurrentProject)
+            raise RuntimeError("Resolve project manager is unavailable")
+        return project_manager.GetCurrentProject()
 
 
 def _call(func: Any) -> Any | None:

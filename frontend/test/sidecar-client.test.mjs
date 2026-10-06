@@ -1,7 +1,11 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { createSidecarClient, formatSidecarError } from "../src/lib/api.ts"
+import {
+  advanceActiveElapsed,
+  createSidecarClient,
+  formatSidecarError,
+} from "../src/lib/api.ts"
 
 const responses = {
   "/status": { connection: "connected" },
@@ -93,7 +97,7 @@ test("reloads the dashboard after a command", async () => {
   assert.deepEqual(requested, ["/refresh", "/dashboard"])
 })
 
-test("watches dashboard updates without exposing event protocol", async () => {
+test("uses published status without rebuilding the dashboard", async () => {
   let source
   class FakeEventSource {
     constructor(url) {
@@ -111,9 +115,9 @@ test("watches dashboard updates without exposing event protocol", async () => {
       this.closed = true
     }
   }
-  let publishUpdate
-  const updatePublished = new Promise((resolve) => {
-    publishUpdate = resolve
+  let publishStatus
+  const statusPublished = new Promise((resolve) => {
+    publishStatus = resolve
   })
   const errors = []
   const client = createSidecarClient({
@@ -123,18 +127,59 @@ test("watches dashboard updates without exposing event protocol", async () => {
   })
 
   const stop = client.watchDashboard({
-    onUpdate: publishUpdate,
+    onDashboard: () => assert.fail("heartbeat must not rebuild the dashboard"),
+    onStatus: publishStatus,
     onError: (error) => errors.push(formatSidecarError(error)),
   })
-  source.listeners.get("dashboard")({ data: "{}" })
-  const update = await updatePublished
+  source.listeners.get("status")({ data: JSON.stringify(responses["/status"]) })
+  const status = await statusPublished
   source.onerror()
   stop()
 
   assert.equal(source.url, "http://sidecar.test/events")
-  assert.deepEqual(update, responses["/dashboard"])
+  assert.deepEqual(status, responses["/status"])
   assert.deepEqual(errors, ["Waiting for the sidecar API"])
   assert.equal(source.closed, true)
+})
+
+test("reloads the dashboard only after a dashboard event", async () => {
+  let source
+  class FakeEventSource {
+    constructor() {
+      this.listeners = new Map()
+      source = this
+    }
+
+    addEventListener(name, listener) {
+      this.listeners.set(name, listener)
+    }
+
+    close() {}
+  }
+  const requested = []
+  let publishDashboard
+  const dashboardPublished = new Promise((resolve) => {
+    publishDashboard = resolve
+  })
+  const client = createSidecarClient({
+    baseUrl: "http://sidecar.test",
+    eventSource: FakeEventSource,
+    fetch: async (url) => {
+      const path = new URL(url).pathname
+      requested.push(path)
+      return Response.json(responses[path])
+    },
+  })
+
+  client.watchDashboard({
+    onDashboard: publishDashboard,
+    onStatus: () => {},
+    onError: () => {},
+  })
+  source.listeners.get("dashboard")({ data: "{}" })
+
+  assert.deepEqual(await dashboardPublished, responses["/dashboard"])
+  assert.deepEqual(requested, ["/dashboard"])
 })
 
 test("exposes the CSV export location", async () => {
@@ -184,4 +229,21 @@ test("normalizes sidecar errors for presentation", () => {
     "sidecar failed"
   )
   assert.equal(formatSidecarError("sidecar failed"), "sidecar failed")
+})
+
+test("advances an active session timer locally", () => {
+  assert.deepEqual(
+    advanceActiveElapsed({
+      ...responses["/status"],
+      tracking_status: "active",
+      active_elapsed_seconds: 62,
+      active_elapsed: "0:01:02",
+    }),
+    {
+      ...responses["/status"],
+      tracking_status: "active",
+      active_elapsed_seconds: 63,
+      active_elapsed: "0:01:03",
+    }
+  )
 })

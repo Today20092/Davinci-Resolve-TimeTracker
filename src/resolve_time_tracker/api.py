@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import asyncio
+from contextlib import asynccontextmanager
 import os
 import platform
 import sys
@@ -25,6 +27,7 @@ from resolve_time_tracker.report_projection import (
     project_report,
 )
 from resolve_time_tracker.tracking_engine import TrackingEngine
+from resolve_time_tracker.tracking_runtime import TrackingRuntime
 
 
 Now = Callable[[], datetime]
@@ -56,13 +59,19 @@ class ApiState:
         store: SQLiteStore,
         *,
         tracking_engine: TrackingEngine | None = None,
+        tracking_runtime: TrackingRuntime | None = None,
         now: Now | None = None,
     ):
         self.store = store
+        self.read_only = False
         self.tracking_engine = tracking_engine
+        self.tracking_runtime = tracking_runtime or (
+            TrackingRuntime(tracking_engine, now=now) if tracking_engine else None
+        )
         self.now = now or (lambda: datetime.now(timezone.utc))
-        self.last_runtime_error: str | None = None
-        self.lock = threading.Lock()
+        self.lock = (
+            self.tracking_runtime.lock if self.tracking_runtime else threading.RLock()
+        )
 
     def status(self) -> dict[str, Any]:
         with self.lock:
@@ -71,13 +80,13 @@ class ApiState:
     def diagnostics(self) -> dict[str, Any]:
         with self.lock:
             snapshot = (
-                self.tracking_engine.previous_snapshot
-                if self.tracking_engine is not None
+                self.tracking_runtime.snapshot
+                if self.tracking_runtime is not None
                 else None
             )
             bridge = (
                 "error"
-                if self.last_runtime_error
+                if self._last_runtime_error
                 else "connected"
                 if snapshot is not None
                 else "waiting"
@@ -97,36 +106,27 @@ class ApiState:
                 "resolve_project_detected": bool(
                     snapshot is not None and snapshot.project_name
                 ),
-                "last_runtime_error": self.last_runtime_error,
+                "last_runtime_error": self._last_runtime_error,
                 "executable": Path(sys.executable).name,
                 **runtime_diagnostics,
             }
 
     def refresh(self) -> dict[str, Any]:
         with self.lock:
-            if self.tracking_engine is not None:
-                try:
-                    self._poll_unlocked()
-                    self.last_runtime_error = None
-                except Exception as exc:
-                    self.last_runtime_error = f"{type(exc).__name__}: {exc}"
             return self._status_unlocked()
 
     def pause(self) -> dict[str, Any]:
         with self.lock:
-            if self.tracking_engine is not None:
-                self.tracking_engine.pause(self.now())
+            self._require_writable()
+            if self.tracking_runtime is not None:
+                self.tracking_runtime.pause(self.now())
             return self._status_unlocked()
 
     def resume(self) -> dict[str, Any]:
         with self.lock:
-            if self.tracking_engine is not None:
-                self.tracking_engine.resume()
-                try:
-                    self._poll_unlocked()
-                    self.last_runtime_error = None
-                except Exception as exc:
-                    self.last_runtime_error = f"{type(exc).__name__}: {exc}"
+            self._require_writable()
+            if self.tracking_runtime is not None:
+                self.tracking_runtime.resume()
             return self._status_unlocked()
 
     def projects(self) -> list[dict[str, Any]]:
@@ -139,12 +139,6 @@ class ApiState:
 
     def dashboard(self) -> dict[str, Any]:
         with self.lock:
-            if self.tracking_engine is not None:
-                try:
-                    self._poll_unlocked()
-                    self.last_runtime_error = None
-                except Exception as exc:
-                    self.last_runtime_error = f"{type(exc).__name__}: {exc}"
             status = self._status_unlocked()
             sessions = self._sessions_unlocked()
             current_project, export_preview = self._current_project_unlocked(
@@ -165,6 +159,7 @@ class ApiState:
 
     def update_settings(self, update: SettingsUpdate) -> dict[str, Any]:
         with self.lock:
+            self._require_writable()
             try:
                 self.store.set_idle_timeout_seconds(update.idle_timeout_seconds)
             except ValueError as exc:
@@ -173,6 +168,7 @@ class ApiState:
 
     def update_session(self, session_id: int, update: SessionUpdate) -> dict[str, Any]:
         with self.lock:
+            self._require_writable()
             try:
                 self.store.update_session(
                     session_id,
@@ -184,6 +180,12 @@ class ApiState:
             except ValueError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
             return self._session_by_id_unlocked(session_id)
+
+    def _require_writable(self) -> None:
+        if self.read_only:
+            raise HTTPException(
+                409, "Open DaVinci Resolve + Time Tracker to change tracking data."
+            )
 
     def csv(self) -> str:
         with self.lock:
@@ -222,27 +224,29 @@ class ApiState:
         )
 
     def events(self, *, once: bool, poll_interval_seconds: float) -> Iterator[str]:
+        read_model_revision: int | None = None
         while True:
-            self.refresh()
-            yield _sse("dashboard", {})
+            yield _sse("status", self.status())
+            if self.store.read_model_revision != read_model_revision:
+                read_model_revision = self.store.read_model_revision
+                yield _sse("dashboard", {})
             if once:
                 return
             time.sleep(poll_interval_seconds)
 
-    def _poll_unlocked(self) -> None:
-        if self.tracking_engine is None:
-            return
-        self.tracking_engine.poll(self.now())
+    @property
+    def _last_runtime_error(self) -> str | None:
+        return self.tracking_runtime.last_error if self.tracking_runtime else None
 
     def _status_unlocked(self) -> dict[str, Any]:
         active = self.store.active_session_summary()
         snapshot = (
-            self.tracking_engine.previous_snapshot
-            if self.tracking_engine is not None
+            self.tracking_runtime.snapshot
+            if self.tracking_runtime is not None
             else None
         )
         status = {
-            "connection": "connected",
+            "connection": "reporting" if self.read_only else "connected",
             "tracking_status": "resolve_closed",
             "project": "none",
             "page": "none",
@@ -250,7 +254,7 @@ class ApiState:
             "active_elapsed_seconds": 0,
             "active_elapsed": "0:00:00",
             "heartbeat": "none",
-            "tracking_enabled": True,
+            "tracking_enabled": self.tracking_engine is not None,
             "db_path": str(self.store.path),
         }
         if active is not None:
@@ -279,14 +283,17 @@ class ApiState:
             status["page"] = snapshot.page or "none"
             if snapshot.project_name:
                 status["tracking_status"] = "idle"
+            if snapshot.activity_unavailable_reason:
+                status["tracking_status"] = "error"
+                status["heartbeat"] = snapshot.activity_unavailable_reason
         if self.tracking_engine is not None:
             status["tracking_enabled"] = self.tracking_engine.tracking_enabled
             if not self.tracking_engine.tracking_enabled:
                 status["state"] = "manual pause"
                 status["tracking_status"] = "paused"
-        if self.last_runtime_error:
+        if self._last_runtime_error:
             status["connection"] = "error"
-            status["heartbeat"] = self.last_runtime_error
+            status["heartbeat"] = self._last_runtime_error
             status["tracking_status"] = "error"
         return status
 
@@ -387,7 +394,18 @@ def create_app(
     poll_interval_seconds: float = 5,
 ) -> FastAPI:
     api = ApiState(store, tracking_engine=tracking_engine, now=now)
-    app = FastAPI(title="Resolve Time Tracker")
+
+    @asynccontextmanager
+    async def lifespan(_app):
+        if api.tracking_runtime is not None:
+            api.tracking_runtime.start()
+        try:
+            yield
+        finally:
+            if api.tracking_runtime is not None:
+                api.tracking_runtime.stop()
+
+    app = FastAPI(title="Resolve Time Tracker", lifespan=lifespan)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -447,8 +465,19 @@ def create_app(
 
     @app.get("/events")
     def events(once: bool = False) -> StreamingResponse:
+        async def stream():
+            revision = None
+            while True:
+                yield _sse("status", api.status())
+                if store.read_model_revision != revision:
+                    revision = store.read_model_revision
+                    yield _sse("dashboard", {})
+                if once:
+                    return
+                await asyncio.sleep(poll_interval_seconds)
+
         return StreamingResponse(
-            api.events(once=once, poll_interval_seconds=poll_interval_seconds),
+            stream(),
             media_type="text/event-stream",
         )
 

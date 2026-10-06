@@ -15,10 +15,11 @@ class RuntimeSnapshot:
     page: str | None
     is_rendering: bool
     idle_seconds: float | None
-    resolve_is_foreground: bool
+    resolve_is_foreground: bool | None
     timeline_name: str | None = None
     timeline_id: str | None = None
     timecode: str | None = None
+    activity_unavailable_reason: str | None = None
 
 
 class TrackingEngine:
@@ -35,6 +36,7 @@ class TrackingEngine:
         self._is_idle = False
         self._has_focus = True
         self._is_rendering = False
+        self._last_heartbeat_at: datetime | None = None
 
     @property
     def runtime_diagnostics(self) -> dict[str, Any]:
@@ -49,13 +51,26 @@ class TrackingEngine:
     def tracking_enabled(self) -> bool:
         return self._tracking_enabled
 
-    def poll(self, observed_at: datetime) -> RuntimeSnapshot:
+    def read_snapshot(self) -> RuntimeSnapshot:
+        return self._snapshot_provider.snapshot()
+
+    def poll(
+        self, observed_at: datetime, snapshot: RuntimeSnapshot | None = None
+    ) -> RuntimeSnapshot:
         if not self._tracking_enabled:
             self._close(observed_at)
             self._previous_idle = None
             return self._previous or RuntimeSnapshot(None, None, False, None, False)
 
-        snapshot = self._snapshot_provider.snapshot()
+        snapshot = snapshot or self.read_snapshot()
+        if (
+            snapshot.activity_unavailable_reason
+            or snapshot.resolve_is_foreground is None
+        ):
+            self._store.recover_active_session()
+            self._previous = None
+            self._previous_idle = None
+            return snapshot
         previous = self._previous
         idle_now = (
             snapshot.idle_seconds is not None
@@ -124,8 +139,12 @@ class TrackingEngine:
             self._is_rendering = snapshot.is_rendering
             self._open_if_billable(observed_at)
 
-        if self._store.active_session() is not None:
+        if self._store.active_session() is not None and (
+            self._last_heartbeat_at is None
+            or (observed_at - self._last_heartbeat_at).total_seconds() >= 10
+        ):
             self._store.update_heartbeat(observed_at)
+            self._last_heartbeat_at = observed_at
         self._previous = snapshot
         self._observed_project_name = snapshot.project_name
         self._previous_idle = idle_now

@@ -21,17 +21,14 @@ class InstallResolveMenuTest(unittest.TestCase):
 
             self.assertEqual(utility_dir / MENU_SCRIPT_NAME, target)
             text = target.read_text(encoding="utf-8")
-            self.assertIn(str(repo_root), text)
+            self.assertIn(str(repo_root.resolve()), text)
             self.assertIn("RESOLVE_TIME_TRACKER_REPO", text)
             self.assertIn("ResolveTimeTracker.py", text)
-            self.assertIn("--companion", text)
+            self.assertIn("--tracked-launch", text)
             self.assertIn("subprocess.Popen", text)
             self.assertIn('os.name == "nt"', text)
-            self.assertIn('".venv" / "bin" / "python"', text)
-            self.assertIn("sys.version_info >= (3, 14)", text)
-            self.assertIn('"--python"', text)
-            self.assertIn('"3.13"', text)
-            self.assertIn("Run uv sync --python 3.13", text)
+            self.assertIn('"bin/python"', text)
+            self.assertIn("installer first", text)
 
     def test_installs_separate_development_launcher(self):
         with tempfile.TemporaryDirectory() as tmp:
