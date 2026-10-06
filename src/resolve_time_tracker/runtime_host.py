@@ -72,14 +72,22 @@ class RuntimeHost:
                     from resolve_time_tracker.resolve_bridge import ResolveBridge
 
                     self.bridge_factory = ResolveBridge
-                self.bridge = self.bridge_factory()
-                engine = TrackingEngine(self.api.store, snapshot_provider=self.bridge)
-                runtime = TrackingRuntime(engine, lock=self.api.lock)
-                self.api.tracking_engine = engine
-                self.api.tracking_runtime = runtime
-                self.api.read_only = False
                 self.resolve_pid = pid
-                runtime.start()
+                try:
+                    self.bridge = self.bridge_factory()
+                    engine = TrackingEngine(
+                        self.api.store, snapshot_provider=self.bridge
+                    )
+                    runtime = TrackingRuntime(engine, lock=self.api.lock)
+                    self.api.tracking_engine = engine
+                    self.api.tracking_runtime = runtime
+                    self.api.read_only = False
+                    runtime.start()
+                except Exception as exc:
+                    self.stop_tracking()
+                    raise LaunchError(
+                        f"Could not start tracking: {exc}. Run Tracked Launch again."
+                    ) from exc
 
     def attach(self, pid):
         with self.lock:

@@ -73,7 +73,10 @@ def discover_resolve_executable(
     conventional: Path = DEFAULT_RESOLVE_EXECUTABLE,
     registry_candidates: Callable[[], list[Path]] = registry_resolve_candidates,
 ) -> Path | None:
-    for candidate in [store.resolve_executable(), conventional, *registry_candidates()]:
+    for candidate in (store.resolve_executable(), conventional):
+        if valid_resolve_executable(candidate):
+            return candidate
+    for candidate in registry_candidates():
         if valid_resolve_executable(candidate):
             return candidate
     return None
@@ -115,7 +118,12 @@ def select_resolve_executable() -> Path | None:
         root.destroy()
     except Exception as exc:
         raise LaunchError(
-            "DaVinci Resolve was not found and the file picker is unavailable. Install Python with Tk support, then run Tracked Launch again."
+            "DaVinci Resolve was not found and the file picker is unavailable. "
+            + (
+                "Check that Windows PowerShell is available, then run Tracked Launch again."
+                if os.name == "nt"
+                else "Install Python with Tk support, then run Tracked Launch again."
+            )
         ) from exc
     return Path(selected) if selected else None
 

@@ -92,7 +92,11 @@ class TrackingRuntime:
     def stop(self) -> None:
         self._stopped.set()
         thread = self._thread
-        if thread is not None and thread is not threading.current_thread():
+        if (
+            thread is not None
+            and thread.ident is not None
+            and thread is not threading.current_thread()
+        ):
             # ponytail: a stuck SDK call can retain one daemon thread; isolate SDK if hangs persist.
             thread.join(timeout=1)
 
