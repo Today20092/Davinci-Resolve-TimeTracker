@@ -60,6 +60,33 @@ class TrackedLaunchTest(unittest.TestCase):
                     )
                 )
 
+    def test_discovery_skips_registry_when_saved_or_conventional_is_valid(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            executable = root / "Resolve.exe"
+            executable.touch()
+            with SQLiteStore(root / "tracker.sqlite3") as store:
+                registry = Mock(side_effect=RuntimeError("registry unavailable"))
+                store.set_resolve_executable(executable)
+                self.assertEqual(
+                    executable,
+                    discover_resolve_executable(
+                        store,
+                        conventional=root / "missing/Resolve.exe",
+                        registry_candidates=registry,
+                    ),
+                )
+                store.set_resolve_executable(root / "missing/Resolve.exe")
+                self.assertEqual(
+                    executable,
+                    discover_resolve_executable(
+                        store,
+                        conventional=executable,
+                        registry_candidates=registry,
+                    ),
+                )
+                registry.assert_not_called()
+
     def test_running_resolve_is_attached_without_spawn_or_picker(self):
         with (
             tempfile.TemporaryDirectory() as tmp,

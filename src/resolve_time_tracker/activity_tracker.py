@@ -75,14 +75,15 @@ class CachedActivityProbe:
         with self._condition:
             if self._closed or present == self._present:
                 return
+            if present and self._thread is None:
+                thread = threading.Thread(
+                    target=self._run, name="activity-probe", daemon=True
+                )
+                thread.start()
+                self._thread = thread
             self._present = present
             self._generation += 1
             self._state = ActivityState(None, None, "activity has not been sampled")
-            if present and self._thread is None:
-                self._thread = threading.Thread(
-                    target=self._run, name="activity-probe", daemon=True
-                )
-                self._thread.start()
             self._condition.notify_all()
 
     def snapshot(self) -> ActivityState:

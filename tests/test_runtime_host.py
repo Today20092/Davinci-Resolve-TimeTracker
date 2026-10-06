@@ -130,6 +130,55 @@ class RuntimeHostTest(unittest.TestCase):
             self.assertTrue(host.tick())
             self.assertIsNone(store.active_session())
 
+    def test_startup_failure_cleans_up_and_allows_another_launch(self):
+        for failure in ("bridge", "thread"):
+            with (
+                self.subTest(failure=failure),
+                tempfile.TemporaryDirectory() as tmp,
+                SQLiteStore(Path(tmp) / "db", check_same_thread=False) as store,
+            ):
+                api = ApiState(store)
+                bridge = Provider()
+
+                def create_bridge():
+                    if failure == "bridge":
+                        raise RuntimeError("bridge unavailable")
+                    return bridge
+
+                host = RuntimeHost(
+                    api,
+                    alive=lambda _: True,
+                    launch=lambda _: 10,
+                    bridge_factory=create_bridge,
+                )
+                host.attach(20)
+                with patch.object(
+                    threading.Thread,
+                    "start",
+                    side_effect=RuntimeError("thread unavailable"),
+                ):
+                    with self.assertRaisesRegex(
+                        LaunchError, "Could not start tracking"
+                    ):
+                        host.track()
+                self.assertTrue(api.read_only)
+                self.assertIsNone(api.tracking_runtime)
+                self.assertIsNone(api.tracking_engine)
+                self.assertIsNone(host.resolve_pid)
+                self.assertIsNone(store.active_session())
+                if failure == "thread":
+                    self.assertTrue(bridge.closed)
+                self.assertFalse(host.tick())
+                host.bridge_factory = Provider
+                try:
+                    host.track()
+                    self.assertFalse(api.read_only)
+                    self.assertIsNotNone(api.tracking_runtime)
+                finally:
+                    host.stop_tracking()
+                    host.detach(20)
+                self.assertTrue(host.tick())
+
     def test_blocked_observation_cannot_prevent_exit_or_write_after_stop(self):
         entered, release = threading.Event(), threading.Event()
 

@@ -1,6 +1,7 @@
 import threading
 import unittest
 from dataclasses import FrozenInstanceError
+from unittest.mock import patch
 
 from resolve_time_tracker.activity_tracker import (
     ActivityState,
@@ -11,6 +12,31 @@ from resolve_time_tracker.activity_tracker import (
 
 
 class ActivityProbeTest(unittest.TestCase):
+    def test_failed_thread_start_can_retry_or_close(self):
+        for retry in (False, True):
+            with self.subTest(retry=retry):
+                sampled = threading.Event()
+
+                class Probe:
+                    def sample(self):
+                        sampled.set()
+                        return ActivityState(0, True)
+
+                probe = CachedActivityProbe(Probe())
+                try:
+                    with patch.object(
+                        threading.Thread,
+                        "start",
+                        side_effect=RuntimeError("unavailable"),
+                    ):
+                        with self.assertRaisesRegex(RuntimeError, "unavailable"):
+                            probe.set_resolve_present(True)
+                    if retry:
+                        probe.set_resolve_present(True)
+                        self.assertTrue(sampled.wait(2))
+                finally:
+                    probe.close()
+
     def test_background_sampling_presence_cadence_and_shutdown(self):
         now = [0.0]
         calls = []
