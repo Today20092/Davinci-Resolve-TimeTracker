@@ -46,7 +46,7 @@ class BootstrapInstallTest(unittest.TestCase):
 
     def test_partial_backup_failure_never_deletes_untouched_environment(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             paths = [root / ".venv", root / "frontend" / "node_modules"]
             for directory in paths:
                 directory.mkdir(parents=True)

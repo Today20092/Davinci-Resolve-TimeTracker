@@ -21,7 +21,7 @@ class InstallResolveMenuTest(unittest.TestCase):
 
             self.assertEqual(utility_dir / MENU_SCRIPT_NAME, target)
             text = target.read_text(encoding="utf-8")
-            self.assertIn(str(repo_root), text)
+            self.assertIn(str(repo_root.resolve()), text)
             self.assertIn("RESOLVE_TIME_TRACKER_REPO", text)
             self.assertIn("ResolveTimeTracker.py", text)
             self.assertIn("--tracked-launch", text)
