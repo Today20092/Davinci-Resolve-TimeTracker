@@ -174,6 +174,17 @@ a directly comparable replacement for the earlier dashboard-open workload.
 
 ### Cached Electron comparison and playback blocking
 
+An additional controlled getter-only reproduction on the same Windows/Studio
+version connected while idle, then timed `GetProjectManager` and `GetCurrentPage`
+once per second without retaining their results. Idle calls took approximately
+0.4–2.3 ms. After loop playback started, iteration 16 entered
+`GetProjectManager` at 16.028 seconds and returned 33.3578 seconds later,
+immediately after playback stopped. The next `GetCurrentPage` took 0.5 ms and
+subsequent idle reads returned in 0.4–0.8 ms. The UI remained at approximately
+29.97 fps while the SDK caller waited. This isolates a blocking getter without
+Electron, tracking, database writes or native UI probe code in the caller.
+It does not prove that every getter or every playback workload behaves alike.
+
 The post-fix dashboard-open run (`resolve-live-cached-electron-300.json`) lasted
 303.53 seconds with the actual Electron dashboard and temporary storage. It
 included the same disposable solid-color timeline, idle phases, looping playback
