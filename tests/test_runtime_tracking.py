@@ -4,7 +4,7 @@ import time
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from resolve_time_tracker.activity_tracker import (
     LinuxActivityProbe,
@@ -315,6 +315,72 @@ class RuntimeTrackingTest(unittest.TestCase):
         self.assertEqual("Timeline 1", snapshot.timeline_name)
         self.assertEqual("timeline-id", snapshot.timeline_id)
         self.assertEqual("01:00:00:00", snapshot.timecode)
+
+    def test_resolve_observations_reuse_the_session_connection(self):
+        bridge = ResolveBridge(activity_probe=FakeActivity())
+        sdk = Mock(
+            scriptapp=Mock(side_effect=[FakeResolve(), RuntimeError("reconnected")])
+        )
+        bridge._module = sdk
+
+        first = bridge.snapshot()
+        second = bridge.snapshot()
+
+        self.assertEqual("Project A", first.project_name)
+        self.assertEqual("Project A", second.project_name)
+        sdk.scriptapp.assert_called_once_with("Resolve")
+
+    def test_failed_required_sdk_read_reconnects_on_next_observation(self):
+        for failure in ("manager", "project", "name", "rendering"):
+            with self.subTest(failure=failure):
+                project = Mock(
+                    GetName=Mock(return_value="Project A"),
+                    IsRenderingInProgress=Mock(return_value=False),
+                    GetCurrentTimeline=Mock(return_value=None),
+                )
+                manager = Mock(GetCurrentProject=Mock(return_value=project))
+                disconnected = Mock(
+                    GetProjectManager=Mock(return_value=manager),
+                    GetCurrentPage=Mock(return_value="edit"),
+                )
+                required_read = {
+                    "manager": disconnected.GetProjectManager,
+                    "project": manager.GetCurrentProject,
+                    "name": project.GetName,
+                    "rendering": project.IsRenderingInProgress,
+                }[failure]
+                required_read.side_effect = RuntimeError("SDK connection lost")
+                sdk = Mock(scriptapp=Mock(side_effect=[disconnected, FakeResolve()]))
+                bridge = ResolveBridge(activity_probe=FakeActivity())
+                bridge._module = sdk
+
+                with self.assertRaisesRegex(RuntimeError, "SDK connection lost"):
+                    bridge.snapshot()
+                recovered = bridge.snapshot()
+
+                self.assertEqual("Project A", recovered.project_name)
+                self.assertEqual(2, sdk.scriptapp.call_count)
+
+    def test_injected_host_resolve_object_survives_temporary_sdk_failure(self):
+        resolve = Mock(
+            GetProjectManager=Mock(
+                side_effect=[
+                    RuntimeError("Host temporarily unavailable"),
+                    FakeProjectManager(),
+                ]
+            ),
+            GetCurrentPage=Mock(return_value="edit"),
+        )
+        bridge = ResolveBridge(activity_probe=FakeActivity(), resolve_object=resolve)
+        sdk = Mock(scriptapp=Mock(side_effect=AssertionError("Must use host object")))
+        bridge._module = sdk
+
+        with self.assertRaisesRegex(RuntimeError, "Host temporarily unavailable"):
+            bridge.snapshot()
+        recovered = bridge.snapshot()
+
+        self.assertEqual("Project A", recovered.project_name)
+        sdk.scriptapp.assert_not_called()
 
 
 class FakeActivity:
