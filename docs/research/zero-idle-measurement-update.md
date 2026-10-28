@@ -86,6 +86,11 @@ arguments, return values, project names or media paths. Snapshot observations
 remain a separate counter. The proxy measures method boundaries, not individual
 transport messages or Resolve's internal work.
 
+This CLI's live mode measures a direct SDK bridge in its benchmark worker. It is
+a diagnostic baseline; it does not measure an isolated SDK-reader architecture
+or its IPC/process overhead. Do not reuse these results as evidence for a later
+production bridge without measuring that actual path separately.
+
 ```text
 uv run --python 3.13 scripts/benchmark_runtime.py --seconds 300 --live-resolve-pid <PID> --output benchmark-live.json
 uv run --python 3.13 scripts/benchmark_runtime.py --seconds 300 --live-resolve-pid <PID> --electron --frontend <built-frontend-directory> --output benchmark-live-dashboard.json

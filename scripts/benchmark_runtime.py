@@ -1,4 +1,7 @@
-"""Temporary-data runtime benchmark; optionally attach to an already-running Resolve."""
+"""Temporary-data benchmark; live mode measures direct, in-process Resolve SDK calls.
+
+This direct-bridge baseline does not measure an isolated SDK reader's IPC or cost.
+"""
 
 from __future__ import annotations
 
