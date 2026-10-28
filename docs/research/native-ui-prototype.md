@@ -156,8 +156,8 @@ The next code slice reuses the existing read-only project/Page/render callback
 on each tick and records its availability, state and latency inside that tick.
 The scope is now `menu_worker_readonly_resolve`; errors include only exception
 type and elapsed time, never private project names or error text. A fake SDK
-success/failure regression covers these records, but live playback/rendering
-evidence for this slice is still pending. No new thread, native timer,
+success/failure regression covers these records. Later idle reads and the delayed
+playback launch are recorded below; rendering remains unverified. No new thread, native timer,
 dependency, billing engine or production tracker was introduced.
 
 ## Remaining live evidence checklist

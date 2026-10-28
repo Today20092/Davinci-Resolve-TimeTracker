@@ -45,12 +45,13 @@ were unavailable during this implementation.
 - The bounded menu worker recorded no-op ticks at 5.000858, 10.001676 and
   15.002405 seconds, then returned and exited. Its same-thread exported
   `StepLoop(wait=False)` route proves bounded no-op scheduling. Periodic SDK
-  read-only workload evidence remains pending; no production tracking is wired.
+  read-only idle evidence is recorded below; playback/render safety remains
+  unproven and no production tracking is wired.
 - Actual cached headless Resolve run: 301.26 seconds, 60 observations, 543 SDK
   calls, zero failures, one `scriptapp` call and 0.7958 seconds total SDK time.
   Sampled application tree used 0.588% of one CPU core, peaked at 79.54 MB and
   three processes, observed zero renderers and zero remaining processes after
-  exit; startup was 1.076 seconds. Cached Electron comparison is underway.
+  exit; startup was 1.076 seconds. The cached Electron result follows.
 - Native idle periodic reads passed on Deliver and Edit pages and returned
   cleanly. A menu launch during looping playback delayed window/report creation
   until playback stopped. A subsequent 21-second sampled worker interval used
@@ -78,7 +79,7 @@ The changes retain stdlib/platform boundaries and explicit measurement limits.
 Earlier parallel review found no confirmed defect in the delivered code slices
 and no scope creep. Later review identified stale documentation conclusions;
 this update distinguishes the successful menu-worker feasibility evidence from
-the historical console failures. #52 still needs its Electron comparison and
+the historical console failures. #52 still needs playback responsiveness and
 workload/platform/managed-upgrade evidence. #57 still needs playback/render-safe
 operation and production integration. Both tickets remain open. Final parallel
 review found zero code findings; its two stale-documentation findings were fixed.

@@ -62,7 +62,7 @@ Development run on Windows 11 Pro 10.0.26200, AMD64, CPython 3.13.5, with `--sec
 
 The OS census includes Windows Python launch-helper processes that the previous fixed value of one omitted. Observations/heartbeats include the initial observation and the final cadence boundary; the per-minute heartbeat cap remained six. No real Resolve SDK calls were made, and the result explicitly reports that metric as unavailable.
 
-Checks on the final code:
+Checks at the synthetic-measurement milestone (superseded counts below):
 
 - `uv run --python 3.13 -m pytest -q`: 112 passed and 16 subtests passed.
 - `uv run --python 3.13 ruff format --check .` and `ruff check .`: passed.
@@ -150,7 +150,7 @@ snapshot read discards that automatic cache so the next observation can
 reconnect. Host-injected Resolve objects are retained, and optional metadata
 reads keep their existing tolerant behavior. The serialized observation cadence
 is unchanged. Tests prove connection reuse and recovery at the public snapshot
-and SDK boundary; improved live latency/CPU still requires a fresh run.
+and SDK boundary; subsequent live measurements are recorded below.
 
 After this fix, the integrated Python suite passed 135 tests and 20 subtests,
 with one installed-profile test skipped. Ruff passed on the changed Python
