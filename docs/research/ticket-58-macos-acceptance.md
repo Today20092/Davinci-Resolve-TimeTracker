@@ -109,3 +109,27 @@ presence suppression and real SDK-child cleanup were verified.
 
 Issue #58 remains open for the listed native Mac gates and X11 checks. The
 blocked SDK-child parent-crash limit remains an observed risk.
+
+## Follow-up foreground failure and correction
+
+The owner performed the foreground sequence and reported that the dashboard did
+not update. The installed runtime stayed paused/idle, with a transient activity
+error. A read-only System Events query for the actual Resolve process returned
+the process name `Resolve`. The Mac probe previously required the substring
+`DaVinci Resolve`, so the actual Mac process name could never be classified as
+foreground. Earlier non-Resolve samples did not establish correct matching.
+
+Source fix `3cd7c46` recognizes the exact native process name and the existing
+`DaVinci Resolve` / `DaVinci Resolve Studio` names. The approved existing probe
+test reproduced failure for `Resolve` before the fix; it now also verifies known
+names, Finder, and an unrelated `Resolve Helper`. Focused activity/runtime tests:
+25 passed, 1 skipped, 25 subtests. Complete Python checks: formatting/lint passed,
+152 tests passed, 4 skipped, 37 subtests. Frontend code was unchanged.
+
+After closing Resolve and releasing all test-runtime owners, the fix was
+cherry-picked into the fresh installed acceptance clone as `67833c2`. Resolve and
+the installed tracker/dashboard were restarted using the same disposable project
+and database. Its idle timeout was temporarily reduced from 300 to 60 seconds
+for the manual idle test. The original timeout must be restored after testing.
+The corrected installed foreground sequence, idle/resume, and actual permission
+denial/recovery are still pending; the regression test alone does not close them.
