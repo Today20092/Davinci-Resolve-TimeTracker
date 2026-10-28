@@ -8,8 +8,8 @@ it does not declare all open tickets complete.
 
 | Ticket | Delivered in this branch | Remaining gate |
 | --- | --- | --- |
-| #52 | Actual SDK/Electron and headless resource measurements, connection cache fix, process/SQL counters, regression coverage and isolated real Windows install/upgrade/rollback test. | SDK getters wait during playback; dashboard-open aggregate budgets fail. Representative render/recovery, actual managed-profile upgrade and native platform checks remain. |
-| #57 | Dedicated native menu worker; hide/reopen/Stop, ten callbacks, three idle periodic SDK reads and sampled worker overhead verified. | Launch during playback delayed until stop. Playback/render safety, activity and production tracking integration remain unproven. |
+| #52 | SDK process isolation keeps HTTP controls responsive during playback; stale-gap billing, Page-change freshness, dead-reader recovery and Windows parent-crash ownership fixed. Five-minute production CLI measurement and corrected normal-exit/reporting cleanup verified. Earlier isolated Windows install/upgrade/rollback evidence retained. | Representative media/render billing, actual managed-profile upgrades, Mac/X11 and release dogfooding. Electron-open aggregate budgets still fail in the earlier measurement. |
+| #57 | Bounded native prototype and timed bootstrap evidence completed. Launch during playback waits before instrumented entry; even a pre-launched window delays its Stop callback until playback stops. | Native production tracking is not approved. Keep the shared runtime with an isolated SDK reader and on-demand Electron while any alternative host integration is evaluated. |
 | #54 | Existing pnpm fix and Mac handoff preserved; no newly reproduced installer defect. | Fresh Mac installation and installed dashboard/menu launch on an available Mac. |
 | #13 | Studio-first support boundary preserved. | Actual Resolve Free environment. Studio checks do not establish Free support. |
 | #20 | Roadmap now accurately preserves source-preview packaging deferral and explicit startup. | Hosting decision and real editing validation before packaging work. |
@@ -20,7 +20,7 @@ were unavailable during this implementation.
 
 ## Verification
 
-- Final integrated Python suite: 138 tests passed, 20 subtests passed and one
+- Final integrated Python suite: 151 tests passed, 22 subtests passed and one
   opt-in installed-profile test skipped. The real isolated Windows installer
   check separately passed in 314.13 seconds; see
   [its scope and substituted path discovery](isolated-windows-install-validation.md).
@@ -64,8 +64,16 @@ were unavailable during this implementation.
   Aggregate tracker/dashboard cost was 3.711% of one core and 478.79 MB peak,
   with seven processes/one renderer and zero remaining after exit. Dashboard-open
   budgets failed. Manual phase timing prevents a controlled pre/post comparison.
+- Current isolated production CLI/HTTP path: 302.281 seconds, 0.765% of one
+  CPU core, 106.31 MB aggregate peak, four processes and zero renderers. One SDK
+  reader throughout; HTTP status latency at most 60.32 ms. Pause/Resume returned
+  in 27.73/24.12 ms while its SDK call remained pending. A corrected final-code
+  lifecycle check verified reporting after Resolve exit, final detach and zero
+  remaining processes. See the report for the original harness endpoint error,
+  tested commit split, sampling limits and Windows crash-ownership tests.
 
-Detailed evidence: [measurement update](zero-idle-measurement-update.md) and
+Detailed current evidence: [isolated SDK live validation](isolated-sdk-live-validation.md).
+Earlier evidence: [measurement update](zero-idle-measurement-update.md) and
 [native prototype](native-ui-prototype.md). Temporary tracker data was used;
 production tracking, installation and history were not changed.
 
@@ -79,16 +87,15 @@ The changes retain stdlib/platform boundaries and explicit measurement limits.
 Earlier parallel review found no confirmed defect in the delivered code slices
 and no scope creep. Later review identified stale documentation conclusions;
 this update distinguishes the successful menu-worker feasibility evidence from
-the historical console failures. #52 still needs playback responsiveness and
-workload/platform/managed-upgrade evidence. #57 still needs playback/render-safe
-operation and production integration. Both tickets remain open. Final parallel
-review found zero code findings; its two stale-documentation findings were fixed.
+the historical console failures. Later review found Session freshness and
+dead-reader recovery defects; both were corrected and re-reviewed. Final
+standards and spec review have zero outstanding findings. #52 retains the named
+workload/platform/managed-upgrade gates, and #57 retains its native-host limitation.
 
 ## Next frontier
 
-Isolate delayed menu bootstrap and SDK waits during playback before connecting
-the native UI to shared tracking/storage. Keep production billing in the
-existing runtime and Electron on demand while the native route remains a
-feasibility experiment. Carry
-Mac/Free validation forward without inventing results or replacing the user's
-Studio installation.
+Validate representative media, render billing, recovery and installed upgrades
+using the isolated runtime before release packaging. Native UIManager hosting
+has not met playback responsiveness requirements; retain on-demand Electron.
+Carry Mac/Free validation forward without inventing results or replacing the
+user's Studio installation.
