@@ -263,12 +263,9 @@ class ApiState:
             started = _parse_utc(active["started_at_utc"])
             heartbeat = active["last_heartbeat_at_utc"]
             now = self.now()
-            stale = (
-                heartbeat
-                and (now - _parse_utc(heartbeat)).total_seconds()
-                > STALE_HEARTBEAT_SECONDS
-            )
-            end = _parse_utc(heartbeat) if stale else now
+            recovery_at = _parse_utc(heartbeat) if heartbeat else started
+            stale = (now - recovery_at).total_seconds() > STALE_HEARTBEAT_SECONDS
+            end = recovery_at if stale else now
             elapsed = max(0, int((end - started).total_seconds()))
             status.update(
                 {
@@ -499,17 +496,25 @@ def run_api(
     import uvicorn
 
     store = SQLiteStore(db_path, check_same_thread=False)
+    bridge = None
     try:
         tracking_engine = None
         if enable_tracking:
-            from resolve_time_tracker.resolve_bridge import ResolveBridge
+            from resolve_time_tracker.isolated_resolve_bridge import (
+                IsolatedResolveBridge,
+            )
 
-            tracking_engine = TrackingEngine(store, snapshot_provider=ResolveBridge())
+            bridge = IsolatedResolveBridge()
+            tracking_engine = TrackingEngine(store, snapshot_provider=bridge)
         uvicorn.run(
             create_app(store, tracking_engine=tracking_engine), host=host, port=port
         )
     finally:
-        store.close()
+        try:
+            if bridge is not None:
+                bridge.close()
+        finally:
+            store.close()
 
 
 def _sse(event: str, data: dict[str, Any]) -> str:

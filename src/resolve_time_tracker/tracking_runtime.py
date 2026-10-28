@@ -137,7 +137,7 @@ class TrackingRuntime:
         with self._lock:
             self._control_generation += 1
             paused_at = observed_at or self._now()
-            heartbeat = self.engine.last_heartbeat_at
+            heartbeat = self.engine.active_recovery_at
             if (
                 heartbeat is not None
                 and (paused_at - heartbeat).total_seconds() > STALE_HEARTBEAT_SECONDS
