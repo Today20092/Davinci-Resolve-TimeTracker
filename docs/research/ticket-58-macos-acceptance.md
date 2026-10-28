@@ -48,12 +48,8 @@ platform tests on a Mac do not establish native X11 behavior.
 
 ## Remaining live acceptance
 
-- With a disposable project and separate database, verify native foreground and
-  idle transitions through the installed tracker, including resumed activity.
-  Automation operated Resolve while the native probe still identified Electron
-  or ChatGPT as foreground; this does not prove foreground editing billing.
-- Exercise an actual denied privacy permission only through a user-controlled
-  OS permission decision; no permission was changed for the probes above.
+- Verify inactivity-threshold pause/resume. The owner explicitly skipped this
+  manual test after only 20–30 seconds without input; it remains unverified.
 - Verify no platform commands are sampled while the real Resolve process is
   absent, including after Resolve exits.
 - Run the required native X11 Linux checks on a real X11 host with Studio.
@@ -133,3 +129,45 @@ and database. Its idle timeout was temporarily reduced from 300 to 60 seconds
 for the manual idle test. The original timeout must be restored after testing.
 The corrected installed foreground sequence, idle/resume, and actual permission
 denial/recovery are still pending; the regression test alone does not close them.
+
+The first corrected human foreground run subsequently recorded editing from
+04:51:58 to 04:52:53 UTC, with contiguous page rows: Edit 10 seconds, Cut 5,
+Color 25, and Edit 15 (55 seconds total). The observer saw active/editing followed
+by paused/idle at 04:52:55 UTC. This verifies native foreground recording and
+page attribution on the corrected installation. A complete foreground return,
+idle-threshold/resume, and permission-denial/recovery sequence still needs
+the following manual checks.
+
+During the next manual run, native observation confirmed Resolve foreground
+with 9.5 seconds of idle time while status was active/editing, followed by
+non-Resolve foreground and paused/idle. The owner reported only 20–30 seconds
+without input and explicitly chose to skip the full idle test. That interval
+does not reach the temporary 60-second threshold, so inactivity pause/resume
+remains unverified. The test database timeout was restored to its original
+300 seconds through the settings API before permission testing.
+
+## Actual permission-denial check
+
+The owner inspected macOS Automation settings and confirmed that both ChatGPT
+and DaVinci Resolve had System Events enabled. For the chat-launched installed
+test runtime, the owner disabled only ChatGPT > System Events and interacted
+with Resolve for approximately 30 seconds, leaving Resolve's permission enabled.
+At 04:57:54 UTC diagnostics changed to `activity probe failed`; by 04:58:00 UTC
+status was error/paused with zero active elapsed time. The Resolve bridge stayed
+connected, the test project remained detected, and SDK reader PID 15843 remained
+alive. This establishes actual permission denial at the native activity boundary
+and fail-closed tracking for this launch origin, not a Resolve scripting failure.
+The owner then restored ChatGPT > System Events and interacted with Resolve.
+At 05:00:41 UTC the activity error cleared; by 05:00:45 UTC status was
+active/editing. The public dashboard API returned a new Edit session from
+05:00:43.983 to 05:00:59.008 UTC (15 seconds), followed by idle/paused when the
+owner returned to the chat. The test database setting was confirmed back at
+300 seconds. Denial and recovery passed without restarting the runtime.
+
+The manual foreground/page attribution and permission-denial/recovery gates
+are now verified on installed source `67833c2` (base `75e8486` plus foreground
+fix `3cd7c46`). Permission evidence applies to the chat-launched runtime's
+ChatGPT Automation grant; Resolve's separate grant stayed enabled throughout.
+The idle gate is intentionally unverified, native X11 remains outside this
+session, and real absent-process command tracing remains open. Neither these
+passes nor the regression fix remove the blocked SDK-child parent-crash limit.
