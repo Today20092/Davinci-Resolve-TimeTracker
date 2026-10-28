@@ -91,6 +91,7 @@ def run_probe(resolve, fusion, bmd, *, report_path=None):
                 ui.Button(
                     {"ID": "Dispatch", "Text": "Run 10 queued callbacks (not a timer)"}
                 ),
+                ui.Button({"ID": "Callback", "Text": "", "Hidden": True}),
                 ui.Button({"ID": "Read", "Text": "Read Resolve once (idle only)"}),
                 ui.Label({"ID": "Status", "Text": "Ready. Tracking is not connected."}),
                 ui.Label({"Text": f"Report: {escape(str(report_path))}"}),
@@ -105,7 +106,6 @@ def run_probe(resolve, fusion, bmd, *, report_path=None):
                 "ID": WINDOW_ID,
                 "WindowTitle": "Resolve native UI probe",
                 "Geometry": [100, 100, 640, 240],
-                "Events": {"ProbeEvent": True},
             },
             layout,
         ),
@@ -133,7 +133,7 @@ def run_probe(resolve, fusion, bmd, *, report_path=None):
         queued_at = time.monotonic()
         report["dispatch_queued"] += 1
         report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
-        ui.QueueEvent(window, "ProbeEvent", {})
+        ui.QueueEvent(window.Find("Callback"), "Clicked", {})
 
     def start_dispatch(event):
         nonlocal dispatch_active
@@ -196,7 +196,7 @@ def run_probe(resolve, fusion, bmd, *, report_path=None):
         window.On["Stop"].Clicked = stop
         window.On["Dispatch"].Clicked = start_dispatch
         window.On["Read"].Clicked = read_resolve
-        window.On[WINDOW_ID].ProbeEvent = dispatch
+        window.On["Callback"].Clicked = dispatch
 
     phase("handlers", handlers)
     phase("show", window.Show)

@@ -96,17 +96,31 @@ Both modes accept `--utility-dir` for isolated test locations. Installation and
 removal refuse a file with different contents, and cleanup removes only the
 matching generated probe entry. Remove it before deleting/moving the checkout.
 
-The callback probe now explicitly enables `ProbeEvent` in the window's `Events`
-attribute. The first-party Workflow Integrations README, lines 340–344, states
-that event handlers can be enabled/disabled there and only common events such as
-Clicked/Close are enabled by default. A boundary test models that filtering and
-reproduces zero callback delivery without the declaration. This is a documented
-API configuration correction, not yet proof of real host delivery.
+The first menu trial explicitly enabled `ProbeEvent` in the window's `Events`
+attribute, but still delivered zero callbacks after one queued event. Enabling an
+arbitrary event name did not establish a native event signal. The probe now queues
+the documented default `Clicked` signal of a dedicated hidden Button, separate
+from the start button. A boundary test that drops arbitrary event names failed
+before that change and passes afterward. The ten-callback bound and timing state
+remain independent of event payloads. Actual delivery still requires the live
+trial; this correction does not establish a periodic timer.
 
 Context7's Fusion Script Docs reference describes `UITimer.Start`, `Stop` and
 `Interval`, but the fetched material does not establish how to create/register
 one in this host or a supported timeout-handler API. The menu experiment does
 not claim a periodic scheduler or guess those calls.
+
+### First dedicated-menu observations
+
+The parent observed the native window launched through the dedicated menu in a
+separate bundled `fuscript.exe` worker, PID 30840, rather than in the Resolve
+process. Its Python version was 3.13.14. The report was written to a new temporary
+`resolve-native-probe-unimmpn2` directory. Hide incremented `hidden_count` to one
+while that worker remained alive. Activating the same menu entry restored the
+same window and report without another probe directory or persistent controller.
+This establishes menu-context hide/reopen behavior for that trial, not periodic
+tracking or production history integration. Stop/full-invocation return and
+fresh-start behavior are separate remaining observations.
 
 ## Live evidence checklist
 

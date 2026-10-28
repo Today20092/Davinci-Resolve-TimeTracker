@@ -24,7 +24,9 @@ class Window:
         self.raised = True
 
     def Find(self, name):
-        return self.items.setdefault(name, SimpleNamespace(Text=""))
+        return self.items.setdefault(
+            name, SimpleNamespace(Text="", window=self, name=name)
+        )
 
 
 class Host:
@@ -57,7 +59,7 @@ class Host:
 
     def AddWindow(self, props, children):
         window = Window(props)
-        for name in (WINDOW_ID, "Read", "Dispatch", "Hide", "Stop", "ProbeEvent"):
+        for name in (WINDOW_ID, "Read", "Dispatch", "Hide", "Stop", "Callback"):
             window.On[name] = SimpleNamespace()
         self.windows[props["ID"]] = window
         return window
@@ -67,8 +69,8 @@ class Host:
         for action in self.actions:
             action(self.windows[WINDOW_ID])
         while self.events:
-            window, name, event = self.events.pop(0)
-            getattr(window.On[WINDOW_ID], name)(event)
+            widget, name, event = self.events.pop(0)
+            getattr(widget.window.On[widget.name], name)(event)
 
     def QueueEvent(self, window, name, event):
         self.events.append((window, name, event))
@@ -131,8 +133,8 @@ def test_dispatch_stays_bounded_when_host_drops_custom_event_fields(tmp_path):
             self.windows[WINDOW_ID].On["Dispatch"].Clicked({})
             delivered = 0
             while self.events and delivered < 30:
-                window, name, event = self.events.pop(0)
-                getattr(window.On[WINDOW_ID], name)(event)
+                widget, name, event = self.events.pop(0)
+                getattr(widget.window.On[widget.name], name)(event)
                 delivered += 1
             assert delivered == 10
             assert not self.events
@@ -224,13 +226,13 @@ def test_probe_reports_completed_host_phases(tmp_path):
     ]
 
 
-def test_custom_probe_events_are_enabled_in_the_native_window(tmp_path):
-    class EventFilteringHost(Host):
+def test_dispatch_uses_a_native_signal_instead_of_an_arbitrary_event_name(tmp_path):
+    class NativeSignalOnlyHost(Host):
         def QueueEvent(self, window, name, event):
-            if window.props.get("Events", {}).get(name):
+            if name == "Clicked":
                 super().QueueEvent(window, name, event)
 
-    host = EventFilteringHost()
+    host = NativeSignalOnlyHost()
     host.actions = [lambda window: window.On["Dispatch"].Clicked({})]
     result = run_probe(None, host, host, report_path=tmp_path / "probe.json")
     assert len(result["dispatch_callbacks"]) == 10
