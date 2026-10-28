@@ -28,13 +28,21 @@ Open the release page below, expand **Assets**, and download **Source code**. Al
 
 Close Resolve and the dashboard and back up `tracker.sqlite3` before updating. The [installation and usage guide](docs/usage.md) also covers bootstrap scripts for current `main`, updates, and uninstalling.
 
-For a one-command macOS install of current `main`, run this in Terminal (requires Git and Node.js with pnpm):
+For a one-command install of current `main`, use the command for your platform (requires Git and Node.js with pnpm).
+
+**Windows — PowerShell:**
+
+```powershell
+irm https://raw.githubusercontent.com/Today20092/Davinci-Resolve-TimeTracker/main/install.ps1 | iex
+```
+
+**macOS — Terminal:**
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Today20092/Davinci-Resolve-TimeTracker/main/install.sh | sh
 ```
 
-This downloads and immediately runs the installer. To inspect it first, [download install.sh](https://raw.githubusercontent.com/Today20092/Davinci-Resolve-TimeTracker/main/install.sh) before running it.
+These commands download and immediately run the installer. To inspect it first, download [install.ps1 for Windows](https://raw.githubusercontent.com/Today20092/Davinci-Resolve-TimeTracker/main/install.ps1) or [install.sh for macOS](https://raw.githubusercontent.com/Today20092/Davinci-Resolve-TimeTracker/main/install.sh) before running it.
 
 ## Why use it?
 
