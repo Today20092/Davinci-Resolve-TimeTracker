@@ -224,7 +224,8 @@ class MacActivityProbe:
             )
         return ActivityState(
             int(match.group(1)) / 1_000_000_000,
-            "DaVinci Resolve" in foreground_output,
+            foreground_output.strip()
+            in {"Resolve", "DaVinci Resolve", "DaVinci Resolve Studio"},
         )
 
     @property

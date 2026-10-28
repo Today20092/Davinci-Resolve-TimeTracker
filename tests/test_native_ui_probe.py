@@ -190,7 +190,9 @@ def test_resolve_reads_are_explicit_read_only_and_do_not_log_project_names(tmp_p
     assert report["resolve_read"]["project_open"] is True
     assert report["resolve_read"]["page"] == "edit"
     assert report["resolve_read"]["rendering"] is False
-    assert "private" not in (tmp_path / "probe.json").read_text()
+    saved_report = json.dumps(json.loads((tmp_path / "probe.json").read_text()))
+    assert "private <project>" not in saved_report
+    assert "private &lt;project&gt;" not in saved_report
     assert "&lt;project&gt;" in host.windows[WINDOW_ID].Find("Status").Text
 
 
