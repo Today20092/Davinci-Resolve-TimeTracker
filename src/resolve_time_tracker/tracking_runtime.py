@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from datetime import datetime, timezone
 from typing import Any, Callable
 
@@ -10,6 +11,7 @@ from resolve_time_tracker.tracking_engine import RuntimeSnapshot, TrackingEngine
 
 
 Now = Callable[[], datetime]
+STALE_HEARTBEAT_SECONDS = 15
 
 
 class TrackingRuntime:
@@ -32,6 +34,8 @@ class TrackingRuntime:
         self._last_error: str | None = None
         self._observation_count = 0
         self._failure_count = 0
+        self._last_observed_at: float | None = None
+        self._control_generation = 0
 
     @property
     def lock(self) -> threading.RLock:
@@ -57,7 +61,10 @@ class TrackingRuntime:
         with self._observation_lock:
             try:
                 # Resolve scripting may block. Never hold the database lock across it.
-                enabled = self.engine.tracking_enabled
+                started = time.monotonic()
+                with self._lock:
+                    enabled = self.engine.tracking_enabled
+                    generation = self._control_generation
                 snapshot = (
                     self.engine.read_snapshot()
                     if enabled
@@ -66,17 +73,43 @@ class TrackingRuntime:
                 with self._lock:
                     if self._stopped.is_set():
                         return False
-                    if not enabled and self.engine.tracking_enabled:
+                    if generation != self._control_generation or (
+                        not enabled and self.engine.tracking_enabled
+                    ):
                         return True
+                    if time.monotonic() - started > STALE_HEARTBEAT_SECONDS:
+                        raise TimeoutError(
+                            "Resolve observation exceeded the 15-second freshness limit"
+                        )
+                    if (
+                        self._last_observed_at is not None
+                        and time.monotonic() - self._last_observed_at
+                        > STALE_HEARTBEAT_SECONDS
+                    ):
+                        self.engine.poll(
+                            observed_at or self._now(),
+                            RuntimeSnapshot(None, None, False, None, None),
+                        )
                     self._snapshot = self.engine.poll(
                         observed_at or self._now(), snapshot
                     )
                     self._last_error = None
                     self._failure_count = 0
                     self._observation_count += 1
+                    self._last_observed_at = time.monotonic()
                 return True
             except Exception as exc:
                 with self._lock:
+                    if self._stopped.is_set():
+                        return False
+                    if generation != self._control_generation:
+                        return True
+                    if time.monotonic() - started > STALE_HEARTBEAT_SECONDS:
+                        # A late result cannot justify billing the unobserved interval.
+                        self._snapshot = self.engine.poll(
+                            observed_at or self._now(),
+                            RuntimeSnapshot(None, None, False, None, None),
+                        )
                     self._last_error = f"{type(exc).__name__}: {exc}"
                     self._failure_count += 1
                 return False
@@ -102,10 +135,22 @@ class TrackingRuntime:
 
     def pause(self, observed_at: datetime | None = None) -> None:
         with self._lock:
-            self.engine.pause(observed_at or self._now())
+            self._control_generation += 1
+            paused_at = observed_at or self._now()
+            heartbeat = self.engine.active_recovery_at
+            if (
+                heartbeat is not None
+                and (paused_at - heartbeat).total_seconds() > STALE_HEARTBEAT_SECONDS
+            ):
+                self.engine.poll(
+                    paused_at,
+                    RuntimeSnapshot(None, None, False, None, None),
+                )
+            self.engine.pause(paused_at)
 
     def resume(self) -> None:
         with self._lock:
+            self._control_generation += 1
             self.engine.resume()
 
     def _run(self) -> None:

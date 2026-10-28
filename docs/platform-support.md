@@ -4,7 +4,7 @@ Resolve Time Tracker is intended to run on Windows, macOS, and Linux where DaVin
 
 ## Windows
 
-Status: verified locally with DaVinci Resolve Studio 21.
+Status: locally exercised with DaVinci Resolve Studio 21.1.1.10. Playback can block SDK observations and undercount time; see the [acceptance results](research/ticket-52-acceptance.md). This is source-preview evidence, not complete billing or clean-machine certification.
 
 Install:
 
@@ -49,7 +49,7 @@ Activity detection:
 - Idle time: `xprintidle`.
 - Foreground app: `xdotool getactivewindow getwindowname`.
 
-Install those tools with your distro package manager for accurate idle/focus tracking. If either tool is missing, the tracker falls back to always-active tracking.
+Install those tools with your distro package manager for X11 idle/focus tracking. If either tool is missing or activity cannot be read, billable tracking pauses. Wayland activity detection is unavailable.
 
 ## Resolve Scripting API Paths
 

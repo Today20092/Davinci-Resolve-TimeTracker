@@ -51,6 +51,14 @@ class TrackingEngine:
     def tracking_enabled(self) -> bool:
         return self._tracking_enabled
 
+    @property
+    def active_recovery_at(self) -> datetime | None:
+        active = self._store.active_session()
+        if active is None:
+            return None
+        value = active["last_heartbeat_at_utc"] or active["started_at_utc"]
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
     def read_snapshot(self) -> RuntimeSnapshot:
         return self._snapshot_provider.snapshot()
 

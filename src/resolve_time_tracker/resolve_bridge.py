@@ -49,6 +49,7 @@ class ResolveBridge:
         )
         self.activity_probe = activity_probe or default_activity_probe()
         self._resolve_object = resolve_object
+        self._automatic_resolve_object: Any | None = None
         self._module: Any | None = None
         self._product_name: str | None = None
         self._version: str | None = None
@@ -56,32 +57,35 @@ class ResolveBridge:
     def snapshot(self) -> RuntimeSnapshot:
         try:
             resolve = self.resolve()
+            self._set_present(True)
+            if self._product_name is None:
+                product_name = getattr(resolve, "GetProductName", None)
+                version = getattr(resolve, "GetVersionString", None)
+                self._product_name = (
+                    _call(product_name) if callable(product_name) else None
+                )
+                self._version = _call(version) if callable(version) else None
+            project = self._current_project(resolve)
+            page = _call(resolve.GetCurrentPage)
+
+            project_name = None
+            is_rendering = False
+            timeline_name = None
+            timeline_id = None
+            timecode = None
+
+            if project is not None:
+                project_name = project.GetName()
+                is_rendering = bool(project.IsRenderingInProgress())
+                timeline = _call(project.GetCurrentTimeline)
+                if timeline is not None:
+                    timeline_name = _call(timeline.GetName)
+                    timeline_id = _call(timeline.GetUniqueId)
+                    timecode = _call(timeline.GetCurrentTimecode)
         except Exception:
+            self._automatic_resolve_object = None
             self._set_present(False)
             raise
-        self._set_present(True)
-        if self._product_name is None:
-            product_name = getattr(resolve, "GetProductName", None)
-            version = getattr(resolve, "GetVersionString", None)
-            self._product_name = _call(product_name) if callable(product_name) else None
-            self._version = _call(version) if callable(version) else None
-        project = self._current_project(resolve)
-        page = _call(resolve.GetCurrentPage)
-
-        project_name = None
-        is_rendering = False
-        timeline_name = None
-        timeline_id = None
-        timecode = None
-
-        if project is not None:
-            project_name = project.GetName()
-            is_rendering = bool(project.IsRenderingInProgress())
-            timeline = _call(project.GetCurrentTimeline)
-            if timeline is not None:
-                timeline_name = _call(timeline.GetName)
-                timeline_id = _call(timeline.GetUniqueId)
-                timecode = _call(timeline.GetCurrentTimecode)
 
         snapshot = getattr(self.activity_probe, "snapshot", None)
         activity = (
@@ -131,10 +135,13 @@ class ResolveBridge:
     def resolve(self) -> Any:
         if self._resolve_object is not None:
             return self._resolve_object
+        if self._automatic_resolve_object is not None:
+            return self._automatic_resolve_object
         module = self._load_module()
         resolve = module.scriptapp("Resolve")
         if not resolve:
             raise RuntimeError("DaVinci Resolve scripting bridge is not connected")
+        self._automatic_resolve_object = resolve
         return resolve
 
     def _load_module(self) -> Any:

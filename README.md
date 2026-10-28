@@ -2,6 +2,8 @@
 
 > **Work in progress:** Resolve Time Tracker is working, but it is still evolving. Clone it, fork it, modify it for your own DaVinci Resolve workflow, and open pull requests if you build something useful.
 
+**0.1.2-alpha.1 source preview:** [Release notes](docs/releases/0.1.2-alpha.1.md). Pause/Resume remains responsive when Resolve scripting stalls, and stale observations no longer justify billable time. **Playback can still be undercounted**, and the dashboard exceeds resource targets. Review the known limits before relying on the preview for billing.
+
 [![DaVinci Resolve](https://img.shields.io/badge/DaVinci_Resolve-Studio-233A51?style=for-the-badge&logo=davinciresolve&logoColor=white)](https://www.blackmagicdesign.com/products/davinciresolve)
 [![Python](https://img.shields.io/badge/Python-3.10--3.13-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-sidecar-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -63,7 +65,7 @@ The headless runtime records the Resolve session without an Electron window. Ope
 
 Closing the dashboard exits Electron. Tracking continues while the tracked Resolve session is open. After Resolve closes, the runtime remains only if the dashboard is still open; closing both ends the runtime. Nothing remains running between sessions. Ordinary dashboard launches use the installed build without running pnpm or rebuilding assets.
 
-For Linux activity detection, install `xprintidle` and `xdotool` with your distro package manager. Without them, the tracker can still run, but it falls back to always-active tracking.
+For X11 activity detection on Linux, install `xprintidle` and `xdotool` with your distro package manager. Missing tools or unavailable activity information pause billable tracking. Wayland activity detection is unavailable.
 
 ### Update
 

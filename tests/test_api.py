@@ -1,4 +1,5 @@
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
@@ -91,10 +92,11 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(1, len(dashboard["sessions"]))
         self.assertEqual(300, dashboard["settings"]["idle_timeout_seconds"])
         current = dashboard["current_project"]
-        self.assertEqual(7200, current["totals"]["tracked_seconds"])
+        self.assertEqual("stale", dashboard["status"]["tracking_status"])
+        self.assertEqual(3600, current["totals"]["tracked_seconds"])
         self.assertEqual(2, current["totals"]["session_count"])
         self.assertEqual(
-            {"editing": 3600, "playback": 3600, "rendering": 0},
+            {"editing": 0, "playback": 3600, "rendering": 0},
             current["activity_totals"],
         )
         self.assertEqual("2026-01-02T10:00:00Z", current["last_activity"])
@@ -140,6 +142,13 @@ class ApiTest(unittest.TestCase):
 
                 client.get("/status")
                 client.get("/dashboard")
+                with ThreadPoolExecutor(max_workers=8) as readers:
+                    responses = list(
+                        readers.map(client.get, ["/status", "/dashboard"] * 20)
+                    )
+                self.assertTrue(
+                    all(response.status_code == 200 for response in responses)
+                )
 
         self.assertEqual(1, len(provider.snapshots))
 
@@ -160,6 +169,8 @@ class ApiTest(unittest.TestCase):
                 status = client.get("/status").json()
 
         self.assertEqual("stale", status["tracking_status"])
+        self.assertEqual(0, status["active_elapsed_seconds"])
+        self.assertEqual("0:00:00", status["active_elapsed"])
 
     def test_status_reports_whether_time_is_actually_being_tracked(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -410,7 +421,9 @@ class ApiTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with (
                 patch("resolve_time_tracker.api.TrackingEngine") as engine,
-                patch("resolve_time_tracker.resolve_bridge.ResolveBridge") as bridge,
+                patch(
+                    "resolve_time_tracker.isolated_resolve_bridge.IsolatedResolveBridge"
+                ) as bridge,
                 patch("uvicorn.run") as run,
             ):
                 run_api(Path(tmp) / "tracker.sqlite3")
@@ -419,6 +432,7 @@ class ApiTest(unittest.TestCase):
         self.assertIs(app.state.api.tracking_engine, engine.return_value)
         engine.assert_called_once()
         bridge.assert_called_once()
+        bridge.return_value.close.assert_called_once()
 
     def test_run_api_can_start_database_api_without_resolve_bridge(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -8,7 +8,7 @@ https://github.com/Today20092/Davinci-Resolve-TimeTracker.
 
 1. Detect the operating system and whether the current directory is already the repository.
 2. Before changing anything, inspect git status and preserve all repository files, branches, commits, tracked-time data, and unrelated worktree changes. Never reset, clean, overwrite, or delete them. The generated ResolveTimeTrackerMenu.py and ResolveTimeTrackerDevMenu.py launchers may be refreshed by the documented installer.
-3. Verify Git, Node.js with npm, uv, and DaVinci Resolve Studio. Report a missing prerequisite instead of silently installing system-wide software.
+3. Verify Git, Node.js, pnpm matching the packageManager field in frontend/package.json, uv, and DaVinci Resolve Studio. Report a missing prerequisite instead of silently installing system-wide software.
 4. Clone the repository only if it is not already present. Otherwise fetch safely and do not change branches or pull across local work without my approval.
 5. From the repository root, run:
    uv sync --python 3.13
