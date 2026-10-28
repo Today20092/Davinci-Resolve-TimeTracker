@@ -10,10 +10,12 @@ research is superseded.
 
 `scripts/native_ui_probe.py` uses only Python standard-library modules and the
 Resolve-provided `resolve`, `fusion` and `bmd` objects. It does not import the
-tracker package, start Electron/HTTP/a worker, install anything, or connect to the
+tracker package, start Electron/HTTP, install anything, or connect to the
 production database. Capability checks use an in-memory SQLite database; JSON
 evidence goes to a new `resolve-native-probe-*` directory in the OS temporary
-directory. The window displays the report path.
+directory. The window displays the report path. Resolve itself runs the dedicated
+Scripts-menu invocation in a bundled `fuscript.exe` worker; the probe does not
+spawn that worker.
 
 - Reports script PID/parent PID, interpreter/platform, and SQLite/ctypes
   availability in the actual script context.
@@ -30,8 +32,9 @@ directory. The window displays the report path.
   explicit; no observation creates a billable Session.
 
 This is not yet the native tracking interface. Pause/resume, history and CSV remain
-in the existing application. Safe periodic scheduling and real tracking
-integration require a separate successful host/lifetime test.
+in the existing application. Bounded no-op scheduling is proven in the menu
+worker; periodic SDK reads during real editing and production tracking integration
+still require their own successful tests.
 
 ## Safe launch
 
@@ -58,13 +61,9 @@ Some host contexts name the Fusion object `fu`; use that existing object as the
 from `RunLoop`. This launch does **not** prove Scripts-menu execution or that the
 menu invocation returns while the controller survives.
 
-To test actual menu execution, place a copy of this self-contained file under a
-new, clearly named temporary Utility entry, following the installed SDK's script
-locations. Do not overwrite `ResolveTimeTrackerMenu.py` or change the production
-installer. Refresh/restart Resolve only after saving the disposable project. The
-temporary entry must execute this script directly with the host globals, not
-spawn the existing companion launcher. Remove only that temporary entry after
-the experiment.
+Use the dedicated opt-in installer below for actual menu execution. The console
+launch above records the historical in-process comparison and is not the chosen
+route for the bounded worker experiment.
 
 ## Dedicated Scripts-menu experiment
 
@@ -104,8 +103,9 @@ arbitrary event name did not establish a native event signal. The probe now queu
 the documented default `Clicked` signal of a dedicated hidden Button, separate
 from the start button. A boundary test that drops arbitrary event names failed
 before that change and passes afterward. The ten-callback bound and timing state
-remain independent of event payloads. Actual delivery still requires the live
-trial; this correction does not establish a periodic timer.
+remain independent of event payloads. The subsequent live menu trial delivered
+all ten callbacks, as recorded below. That delivery alone does not establish a
+periodic timer.
 
 Context7's Fusion Script Docs reference describes `UITimer.Start`, `Stop` and
 `Interval`, but the fetched material does not establish how to create/register
@@ -160,7 +160,12 @@ success/failure regression covers these records, but live playback/rendering
 evidence for this slice is still pending. No new thread, native timer,
 dependency, billing engine or production tracker was introduced.
 
-## Live evidence checklist
+## Remaining live evidence checklist
+
+The dedicated menu trial already established window creation, ten native callback
+deliveries, hide/reopen reuse, Stop/full invocation return and worker exit. Its
+bounded no-op scheduler also passed. The checks below track broader acceptance;
+unchecked combined items may include those already observed substeps.
 
 - [ ] Record Windows build, Resolve edition/version, repository commit, shipped
   SDK revision, probe PID/parent and the application process tree. Compare script
@@ -181,14 +186,20 @@ dependency, billing engine or production tracker was introduced.
   crash an unsaved project or terminate a production tracking runtime.
 - [ ] Confirm the existing independently launched reporting dashboard still works
   and is absent when not requested, using #52's lifecycle checks.
-- [ ] Establish an actually supported periodic scheduler, or recommend a measured
-  existing-worker adaptation. Do not report the queued-event test as that proof.
+- [ ] Validate the proven bounded worker scheduler with periodic read-only SDK
+  calls during editing/playback/rendering, then measure native worker resources.
+  Do not report the queued-event test as that proof.
 
-No live check is marked passed by this document. The automated test is against a
-fake SDK/GUI boundary; it verifies our handler behavior, report/privacy rules,
-bounded callback count, reuse and stop cleanup, not the native host.
+Live passes above come from the actual menu worker reports and process checks.
+Automated fake SDK/GUI tests separately verify handler behavior, report/privacy
+rules, bounded callback count, reuse and stop cleanup; they do not establish host
+behavior.
 
-## Initial Windows host attempt
+## Historical console-only Windows attempts
+
+These observations predate the successful dedicated menu worker trials above.
+Their console failures remain relevant to that route, but their then-unverified
+menu/callback/scheduling conclusions are superseded by the newer menu evidence.
 
 The parent agent launched the probe from the Python console of Resolve on Windows
 11 build 26200, with a saved disposable project. The initial temporary JSON
@@ -217,18 +228,19 @@ On the instrumented retry the parent found a visible native child window owned b
 Resolve, PID 34384, with Python 3.13.14 and a report at `before_run_loop`. That is
 the expected phase while the event loop is active. The layout call matches the
 shipped sample's `AddWindow(properties, ui.VGroup([children]))` shape and the retry
-now establishes visible console-context window creation. Menu launch, independent
-controller lifetime, periodic scheduling and real tracking remain unverified.
+now establishes visible console-context window creation. At this stage, menu
+launch, controller lifetime and periodic scheduling had not yet been tested.
 
 Clicking the initial Dispatch implementation left the displayed result at 0/10.
-The cause is not yet established. Its old implementation interpreted a missing
+The cause had not yet been established. Its old implementation interpreted a missing
 custom event timestamp as another initial button press; a host that drops custom
 payload fields could therefore requeue indefinitely. A regression test reproduced
 that case. Start-button handling and queued callbacks are now separate, with the
 timestamp and bounded counter retained in Python state instead of trusting event
 payloads. JSON records enqueued and delivered counts separately. The fake-host
-regression is not proof of actual custom-event delivery, and a live retry of the
-bounded-callback fix has not been completed.
+regression was not proof of actual custom-event delivery. The later menu trial
+still failed with a custom event; switching to a native Button Clicked signal
+then delivered all ten callbacks.
 
 The parent also observed the original probe's explicit read succeeding while
 idle: a project was open, Page was `cut`, rendering was false and the getter
@@ -247,11 +259,12 @@ its probe was active. No existing project was opened or edited. The saved empty
 `TimeTracker Spec Probe 20261027` project remains available for later checks.
 
 The console route is therefore not yet suitable for a production tracking
-controller. Keep #57 open for a safe Scripts-menu or lightweight-worker
-experiment, preserving the working sidecar/dashboard. Do not infer that menu
+controller. The subsequent Scripts-menu worker proves a viable bounded
+feasibility route while preserving the working sidecar/dashboard. Keep #57 open
+for the remaining read-only workload and resource evidence. Do not infer that menu
 execution will behave the same as the console, or force tracker work into the
-host process to reduce process count. The bounded callback correction is tested
-against the SDK boundary only and still needs a fresh live host trial.
+host process to reduce process count. Production tracking integration is outside
+this disposable probe's scope.
 
 ## Automated checks
 
