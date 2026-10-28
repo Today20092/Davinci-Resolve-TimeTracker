@@ -33,11 +33,12 @@ class Resolve:
 
     def GetProjectManager(self):
         if (ROOT / "block").exists():
+            milliseconds = int((ROOT / "block").read_text() or "3000")
             (ROOT / "entered").touch()
             if os.name == "nt":
-                ctypes.PyDLL("kernel32").Sleep(3000)
+                ctypes.PyDLL("kernel32").Sleep(milliseconds)
             else:
-                ctypes.PyDLL(None).usleep(3000000)
+                ctypes.PyDLL(None).usleep(milliseconds * 1000)
         return Manager()
 
     def GetCurrentPage(self):

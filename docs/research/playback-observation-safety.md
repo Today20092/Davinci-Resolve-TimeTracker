@@ -45,13 +45,21 @@ There is one serialized in-flight request. After the existing 15-second limit,
 the parent reports an error without spawning replacement readers or queuing
 additional SDK calls. A late response is discarded, then a later fresh request
 can use the same child. Diagnostics read cached metadata without calling the SDK.
+An exited reader is reaped and its pipe is closed before a later observation can
+start a replacement. A live blocked reader is never replaced on a timeout.
 
 Normal close/Resolve exit closes or boundedly terminates and joins that owned
-child. The child also watches parent lifetime while idle. A native SDK call can
-prevent the child's Python lifetime check from running; hard parent-crash orphan
-cleanup during such a call is not guaranteed by multiprocessing's daemon flag.
-No crash-safety claim is made without an OS ownership test. Native Mac/X11
-behavior remains unverified. Process/resource measurements must include this
+child. On Windows, the exact spawned process handle is assigned to an unnamed,
+non-inheritable job with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` before any SDK
+request. Failure to create/configure/assign that job stops the owned reader and
+raises an error. A real Windows process test hard-terminates a disposable parent
+while its SDK child holds the GIL for thirty seconds; the child's retained OS
+identity exits within one second. A separate boundary failure test verifies
+cleanup before any SDK request, and a killed-reader test verifies clean replacement.
+
+The child also watches parent lifetime while idle on other platforms. A native
+SDK call can prevent that Python check from running; equivalent hard-parent-exit
+cleanup is not established on Mac/X11. Process/resource measurements must include this
 additional child and any platform multiprocessing helpers.
 
 The deterministic reproduction holds the calling interpreter's GIL with
@@ -66,3 +74,10 @@ References fetched through Context7: Python 3.13
 The official [ctypes PyDLL reference](https://docs.python.org/3.13/library/ctypes.html#ctypes.PyDLL)
 documents that those foreign calls retain the GIL. Context7's ctypes lookup hit
 its quota; that fact was checked in the official reference instead.
+Windows ownership uses the documented
+[job lifetime flag](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects),
+[extended limit structure](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-jobobject_extended_limit_information)
+and [process assignment API](https://learn.microsoft.com/en-us/windows/win32/api/jobapi2/nf-jobapi2-assignprocesstojobobject).
+Context7's Windows API lookup also hit its quota, so these facts were checked in
+Microsoft's references. Only the tracker-created SDK child is assigned; Resolve
+itself is never assigned to the cleanup job.
