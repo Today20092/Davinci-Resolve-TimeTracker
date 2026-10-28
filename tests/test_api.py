@@ -1,4 +1,5 @@
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
@@ -141,6 +142,13 @@ class ApiTest(unittest.TestCase):
 
                 client.get("/status")
                 client.get("/dashboard")
+                with ThreadPoolExecutor(max_workers=8) as readers:
+                    responses = list(
+                        readers.map(client.get, ["/status", "/dashboard"] * 20)
+                    )
+                self.assertTrue(
+                    all(response.status_code == 200 for response in responses)
+                )
 
         self.assertEqual(1, len(provider.snapshots))
 

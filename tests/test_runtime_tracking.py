@@ -2,7 +2,7 @@ import tempfile
 import threading
 import time
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -64,25 +64,29 @@ class RuntimeTrackingTest(unittest.TestCase):
             with SQLiteStore(Path(tmp) / "tracker.sqlite3") as store:
                 provider = SequenceSnapshotProvider(
                     [
-                        RuntimeSnapshot("Project A", "cut", False, 0, True),
-                        RuntimeSnapshot("Project A", "cut", False, 0, True),
-                        RuntimeSnapshot("Project A", "cut", False, 0, True),
+                        RuntimeSnapshot("Project A", "cut", False, 0, True)
+                        for _ in range(12)
                     ]
                 )
                 runtime = TrackingRuntime(
                     TrackingEngine(store, snapshot_provider=provider)
                 )
 
-                runtime.observe(utc(10))
-                runtime.observe(utc(10, 5))
-                runtime.observe(utc(10, 10))
+                with patch.object(
+                    store, "update_heartbeat", wraps=store.update_heartbeat
+                ) as heartbeat:
+                    for seconds in range(0, 60, 5):
+                        runtime.observe(utc(10) + timedelta(seconds=seconds))
+                    self.assertEqual(6, heartbeat.call_count)
 
                 active = store.active_session()
 
-        self.assertEqual(3, runtime.observation_count)
+        self.assertEqual(12, runtime.observation_count)
+        assert runtime.snapshot is not None
+        assert active is not None
         self.assertEqual("Project A", runtime.snapshot.project_name)
         self.assertIsNone(runtime.last_error)
-        self.assertEqual("2026-01-02T10:10:00Z", active["last_heartbeat_at_utc"])
+        self.assertEqual("2026-01-02T10:00:50Z", active["last_heartbeat_at_utc"])
 
     def test_failed_observation_keeps_published_state_and_session_open(self):
         with tempfile.TemporaryDirectory() as tmp:

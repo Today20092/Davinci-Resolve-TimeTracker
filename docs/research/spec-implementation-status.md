@@ -1,8 +1,10 @@
 # Spec implementation status
 
-Integration branch: `codex/implement-native-spec`, based on main `4b311cf`.
+Integration branch: `development` (formerly `codex/implement-native-spec`), based on main `4b311cf`.
 This records the completed Windows code slices and remaining acceptance gates;
 it does not declare all open tickets complete.
+
+Latest acceptance: [Ticket 52 Windows update](ticket-52-acceptance.md). Added concurrent-reader, heartbeat-rate and platform failure coverage passes, and the real isolated Windows installer check passed again. Live Resolve 21.1.1 playback still blocks fresh SDK observations; rendering and normal cleanup were exercised. The combined Electron workload exceeded resource targets. macOS/X11 checks moved to [#58](https://github.com/Today20092/Davinci-Resolve-TimeTracker/issues/58) with the owner's approval; #52 remains open for its Windows gates.
 
 ## Ticket graph
 

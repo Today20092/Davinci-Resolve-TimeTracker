@@ -46,6 +46,8 @@ class WindowsInstallIntegrationTest(unittest.TestCase):
                     "__pycache__",
                     ".pytest_cache",
                     ".ruff_cache",
+                    ".scratch",
+                    ".codex-remote-attachments",
                 ),
             )
             environment = {

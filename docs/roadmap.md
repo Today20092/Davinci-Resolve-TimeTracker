@@ -5,6 +5,7 @@ This document tracks product direction and project status. The README stays focu
 ## Current Focus
 
 - Verify real Resolve editing performance and complete trustworthy process/resource measurements in [#52](https://github.com/Today20092/Davinci-Resolve-TimeTracker/issues/52).
+- Resolve the [reproduced playback-observation gap](research/ticket-52-acceptance.md) before treating responsive controls as proof of accurate playback billing. Native macOS/X11 validation continues in [#58](https://github.com/Today20092/Davinci-Resolve-TimeTracker/issues/58).
 - Test a compact native Resolve UIManager utility on Windows in [#57](https://github.com/Today20092/Davinci-Resolve-TimeTracker/issues/57). The agreed experiment keeps independent Electron reporting on demand and permits a lightweight worker if needed. A full UI rewrite depends on the prototype results.
 - Preserve tracking accuracy, local history, settings and exports while changing launch or presentation behavior.
 

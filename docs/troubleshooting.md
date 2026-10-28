@@ -19,6 +19,8 @@ The timer only counts when a project is open and one of these conditions is true
 
 Check the dashboard's tracking status and confirm tracking is resumed. If you opened Resolve through its ordinary shortcut, attach tracking from its Scripts menu. Switching applications, minimizing Resolve, becoming idle, or manually pausing tracking stops billable time.
 
+Resolve Studio 21.1.1 can block scripting reads during playback. The tracker keeps controls responsive but excludes time it cannot verify; playback can therefore be undercounted. After playback stops, fresh observations resume. This remains an open correctness issue in [#52](https://github.com/Today20092/Davinci-Resolve-TimeTracker/issues/52); see the [live acceptance results](research/ticket-52-acceptance.md).
+
 ## The tracker still runs after the dashboard closes
 
 Closing the dashboard exits Electron. The headless runtime continues recording while the tracked Resolve session is open. Close Resolve too when you want the runtime to exit. If Resolve closes first, the dashboard can still show saved data until you close it.
