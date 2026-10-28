@@ -87,14 +87,41 @@ def native_probe_launcher_text(repo_root: Path) -> str:
     source = repo_root.resolve() / "scripts" / "native_ui_probe.py"
     return f'''"""Disposable native Resolve Time Tracker probe; generated opt-in entry."""
 import json
-import runpy
+import os
+import sys
+import tempfile
+import time
 from pathlib import Path
 
-_probe_globals = runpy.run_path(
-    {str(source)!r},
-    init_globals={{"resolve": resolve, "fusion": fusion, "bmd": bmd, "native_probe_menu_worker": True}},
-    run_name="__main__",
-)
+_report_dir = Path(tempfile.mkdtemp(prefix="resolve-native-probe-"))
+_bootstrap_path = _report_dir / "bootstrap.json"
+_started = time.monotonic()
+_bootstrap = {{"pid": os.getpid(), "parent_pid": os.getppid(), "python": sys.version,
+              "entered_unix_seconds": time.time(), "phases": []}}
+
+def _bootstrap_phase(name):
+    _bootstrap["phase"] = name
+    _bootstrap["phases"].append({{"phase": name, "elapsed_seconds": time.monotonic() - _started}})
+    _bootstrap_path.write_text(json.dumps(_bootstrap, indent=2), encoding="utf-8")
+
+_bootstrap_phase("menu_entered")
+try:
+    import runpy
+    _bootstrap_phase("before_probe_source")
+    _probe_globals = runpy.run_path(
+        {str(source)!r},
+        init_globals={{"resolve": resolve, "fusion": fusion, "bmd": bmd,
+                      "native_probe_menu_worker": True,
+                      "native_probe_report_path": _report_dir / "probe.json",
+                      "native_probe_bootstrap_phase": _bootstrap_phase}},
+        run_name="__main__",
+    )
+except BaseException as _error:
+    _bootstrap.update(failed_phase=_bootstrap["phase"], error_type=type(_error).__name__)
+    _bootstrap_phase("failed")
+    raise
+_bootstrap["menu_invocation_returned"] = True
+_bootstrap_phase("menu_returned")
 _probe_result = _probe_globals.get("PROBE_RESULT", {{}})
 if _probe_result.get("report_path"):
     _report_path = Path(_probe_result["report_path"])

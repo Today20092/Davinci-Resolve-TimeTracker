@@ -23,16 +23,21 @@ class InstallResolveMenuTest(unittest.TestCase):
             source = root / "scripts" / "native_ui_probe.py"
             source.parent.mkdir()
             report_path = root / "probe.json"
-            report_path.write_text("{}", encoding="utf-8")
             source.write_text(
-                f"PROBE_RESULT = {{'report_path': {str(report_path)!r}}}",
+                "assert (native_probe_report_path.parent / 'bootstrap.json').exists()\n"
+                "native_probe_report_path.write_text('{}', encoding='utf-8')\n"
+                "PROBE_RESULT = {'report_path': str(native_probe_report_path)}",
                 encoding="utf-8",
             )
             target = install_native_probe(repo_root=root, utility_dir=root / "Utility")
-            exec(target.read_text(), {"resolve": None, "fusion": None, "bmd": None})
+            with patch("tempfile.mkdtemp", return_value=str(root)):
+                exec(target.read_text(), {"resolve": None, "fusion": None, "bmd": None})
             self.assertTrue(
                 json.loads(report_path.read_text())["menu_invocation_returned"]
             )
+            bootstrap = json.loads((root / "bootstrap.json").read_text())
+            self.assertEqual("menu_returned", bootstrap["phase"])
+            self.assertTrue(bootstrap["menu_invocation_returned"])
 
     def test_native_probe_cli_does_not_install_production_launchers(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -87,7 +92,11 @@ class InstallResolveMenuTest(unittest.TestCase):
 
             target = install_native_probe(repo_root=root, utility_dir=utility)
             fusion, resolve, bmd = [], object(), object()
-            exec(target.read_text(), {"fusion": fusion, "resolve": resolve, "bmd": bmd})
+            with patch("tempfile.mkdtemp", return_value=str(utility)):
+                exec(
+                    target.read_text(),
+                    {"fusion": fusion, "resolve": resolve, "bmd": bmd},
+                )
 
             self.assertEqual([(resolve, bmd, "__main__")], fusion)
             self.assertEqual("existing production entry", production.read_text())

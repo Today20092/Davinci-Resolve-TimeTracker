@@ -20,7 +20,8 @@ spawn that worker.
 - Reports script PID/parent PID, interpreter/platform, and SQLite/ctypes
   availability in the actual script context.
 - Uses a stable window ID. A second invocation shows/raises an existing window
-  before creating a dispatcher or writing another report.
+  before creating a dispatcher or writing another controller report. Each menu
+  invocation writes a separate bootstrap report so pre-window waits are visible.
 - Close and Hide call `Hide`, leaving the event loop active. Stop probe calls
   `ExitLoop`, including when evidence can no longer be written.
 - An explicit button queues ten bounded no-op callbacks and records callback
@@ -85,7 +86,31 @@ The entry opts into the bounded separate-worker experiment described below. It
 adds `menu_invocation_returned: true` to the probe's temporary report
 only after the entire `runpy` invocation returns. A report ending at
 `after_run_loop` without that marker is not proof of full menu return. A second
-activation that only focuses an existing window creates no report of its own.
+activation reuses the controller report but records its own bootstrap evidence.
+
+### Bootstrap evidence for delayed playback launch
+
+The generated entry now writes `bootstrap.json` into its temporary probe directory
+before `runpy` or any host-object lookup. The probe uses the same directory for
+`probe.json`. Bootstrap evidence records process identity, interpreter, wall-clock
+entry time, and monotonic phase durations. It distinguishes `before_host_context`,
+`before_ui_manager`, `before_find_window`, and dispatcher/layout/show/loop phases.
+An exception records only its type and last phase, never its private message.
+
+While reproducing a delayed launch, inspect the newest `resolve-native-probe-*`
+directory and its bootstrap phase **before** stopping playback. A running menu
+worker with no new bootstrap file means the delay precedes the instrumented Python
+entry (or standard-library imports/temp-file creation); do not attribute it to a
+particular SDK getter. A file stuck at a `before_*` phase narrows the wait to that
+stage. A blocked OS write can also delay evidence, so absence alone is not proof
+that Python never ran. The `menu_returned` phase establishes wrapper return.
+
+This instrumentation is opt-in diagnostic evidence, not a playback fix. The
+generated-wrapper test observes the first marker at the actual fake SDK boundary,
+then verifies sanitized failure and shared-directory report handoff. The live
+playback reproduction remains owned by the parent test session. Remove the old
+generated probe entry using its original checkout before installing this changed
+wrapper; ownership checks intentionally refuse to overwrite different contents.
 
 To remove this checkout's temporary menu entry after the experiment:
 
