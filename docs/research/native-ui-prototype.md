@@ -131,9 +131,26 @@ custom event timestamp as another initial button press; a host that drops custom
 payload fields could therefore requeue indefinitely. A regression test reproduced
 that case. Start-button handling and queued callbacks are now separate, with the
 timestamp and bounded counter retained in Python state instead of trusting event
-payloads. JSON records enqueued and delivered counts separately. The parent will
-retest after stopping the previous probe; the fake-host regression is not proof
-of actual custom-event delivery.
+payloads. JSON records enqueued and delivered counts separately. The fake-host
+regression is not proof of actual custom-event delivery, and a live retry of the
+bounded-callback fix has not been completed.
+
+The parent also observed the original probe's explicit read succeeding while
+idle: a project was open, Page was `cut`, rendering was false and the getter
+sequence took approximately 0.00269 seconds. Stop recorded `stopped: true` and
+`after_run_loop`, and the child window hid. However, the console input remained
+disabled and did not accept a subsequent command minutes later. This establishes
+event-loop exit, not successful return from the full console invocation. The
+current phase markers do not distinguish a blocked final Hide from object
+cleanup/destruction or other host-console behavior. No repeat invocation or
+stale-window experiment could be completed in that console.
+
+The console route is therefore not yet suitable for a production tracking
+controller. Keep #57 open for a safe Scripts-menu or lightweight-worker
+experiment, preserving the working sidecar/dashboard. Do not infer that menu
+execution will behave the same as the console, or force tracker work into the
+host process to reduce process count. The bounded callback correction is tested
+against the SDK boundary only and still needs a fresh live host trial.
 
 ## Automated checks
 
