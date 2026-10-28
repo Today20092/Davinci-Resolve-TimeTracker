@@ -1,0 +1,168 @@
+"""Disposable UIManager experiment; run from Resolve, never the production launcher."""
+
+import json
+from html import escape
+from importlib import import_module
+import os
+import platform
+import sys
+import tempfile
+import time
+from pathlib import Path
+from typing import Any
+
+WINDOW_ID = "com.resolve-time-tracker.NativeProbe"
+
+
+def run_probe(resolve, fusion, bmd, *, report_path=None):
+    ui = fusion.UIManager
+    existing = ui.FindWindow(WINDOW_ID)
+    if existing:
+        existing.Show()
+        existing.Raise()
+        return {"reused_window": True, "window_id": WINDOW_ID}
+
+    report_path = Path(
+        report_path
+        or Path(tempfile.mkdtemp(prefix="resolve-native-probe-")) / "probe.json"
+    )
+    capabilities = {}
+    for name in ("sqlite3", "ctypes"):
+        try:
+            module = import_module(name)
+            if name == "sqlite3":
+                with module.connect(":memory:") as connection:
+                    connection.execute("SELECT 1").fetchone()
+            capabilities[name] = True
+        except (ImportError, OSError):
+            capabilities[name] = False
+    report: dict[str, Any] = {
+        "window_id": WINDOW_ID,
+        "pid": os.getpid(),
+        "parent_pid": os.getppid(),
+        "python": sys.version,
+        "platform": platform.platform(),
+        "sqlite_available": capabilities["sqlite3"],
+        "ctypes_available": capabilities["ctypes"],
+        "tracking_connected": False,
+        "periodic_scheduler_verified": False,
+        "report_path": str(report_path),
+        "hidden_count": 0,
+        "stopped": False,
+        "dispatch_callbacks": [],
+    }
+    report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    dispatcher = bmd.UIDispatcher(ui)
+    window = dispatcher.AddWindow(
+        {
+            "ID": WINDOW_ID,
+            "WindowTitle": "Resolve native UI probe",
+            "Geometry": [100, 100, 640, 240],
+        },
+        ui.VGroup(
+            [
+                ui.Label(
+                    {
+                        "Text": "Feasibility probe only. No time is billed and no history is changed."
+                    }
+                ),
+                ui.Label(
+                    {
+                        "Text": "Closing hides this probe. Re-run the menu entry to reopen; Stop ends it."
+                    }
+                ),
+                ui.Button({"ID": "Hide", "Text": "Hide probe"}),
+                ui.Button(
+                    {"ID": "Dispatch", "Text": "Run 10 queued callbacks (not a timer)"}
+                ),
+                ui.Button({"ID": "Read", "Text": "Read Resolve once (idle only)"}),
+                ui.Label({"ID": "Status", "Text": "Ready. Tracking is not connected."}),
+                ui.Label({"Text": f"Report: {escape(str(report_path))}"}),
+                ui.Button({"ID": "Stop", "Text": "Stop probe"}),
+            ]
+        ),
+    )
+
+    def hide(event):
+        window.Hide()
+        report["hidden_count"] += 1
+        report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+
+    def stop(event):
+        report["stopped"] = True
+        try:
+            report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+        finally:
+            dispatcher.ExitLoop()
+
+    def dispatch(event):
+        if report["stopped"]:
+            return
+        queued_at = event.get("queued_at")
+        if queued_at is None:
+            report["dispatch_callbacks"] = []
+        else:
+            report["dispatch_callbacks"].append(
+                {"latency_seconds": time.monotonic() - queued_at}
+            )
+        count = len(report["dispatch_callbacks"])
+        window.Find(
+            "Status"
+        ).Text = (
+            f"Queued callbacks: {count}/10. Periodic scheduling remains unverified."
+        )
+        report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+        if count < 10:
+            ui.QueueEvent(window, "ProbeEvent", {"queued_at": time.monotonic()})
+
+    def read_resolve(event):
+        started_at = time.monotonic()
+        try:
+            project = resolve.GetProjectManager().GetCurrentProject()
+            page = resolve.GetCurrentPage()
+            rendering = project.IsRenderingInProgress() if project else False
+            name = project.GetName() if project else "No project"
+            report["resolve_read"] = {
+                "available": True,
+                "project_open": project is not None,
+                "page": page,
+                "rendering": rendering,
+                "duration_seconds": time.monotonic() - started_at,
+            }
+            window.Find(
+                "Status"
+            ).Text = f"{escape(str(name))} / {escape(str(page))}, rendering: {rendering}. Not tracking."
+        except Exception as error:
+            report["resolve_read"] = {
+                "available": False,
+                "error_type": type(error).__name__,
+            }
+            window.Find(
+                "Status"
+            ).Text = "Resolve read unavailable. No time is being billed."
+        report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+
+    window.On[WINDOW_ID].Close = hide
+    window.On["Hide"].Clicked = hide
+    window.On["Stop"].Clicked = stop
+    window.On["Dispatch"].Clicked = dispatch
+    window.On["Read"].Clicked = read_resolve
+    window.On[WINDOW_ID].ProbeEvent = dispatch
+    window.Show()
+    try:
+        dispatcher.RunLoop()
+    finally:
+        window.Hide()
+    return report
+
+
+def main(namespace):
+    if not namespace.get("fusion") or not namespace.get("bmd"):
+        raise RuntimeError(
+            "Run this probe from Resolve's Python console or a native Scripts-menu entry."
+        )
+    return run_probe(namespace.get("resolve"), namespace["fusion"], namespace["bmd"])
+
+
+if __name__ == "__main__":
+    main(globals())
