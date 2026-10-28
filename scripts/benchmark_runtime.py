@@ -422,6 +422,7 @@ def main():
                 creationflags=flags,
             )
         )
+        resolve_pid = resolve.pid if resolve is not None else args.live_resolve_pid
         started = time.perf_counter()
         child = subprocess.Popen(
             [
@@ -431,11 +432,7 @@ def main():
                 "--db",
                 str(db),
                 "--resolve-pid",
-                str(
-                    args.live_resolve_pid
-                    if args.live_resolve_pid is not None
-                    else resolve.pid
-                ),
+                str(resolve_pid),
                 "--output",
                 str(worker_output),
                 *(
