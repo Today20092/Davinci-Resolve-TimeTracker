@@ -49,7 +49,7 @@ Activity detection:
 - Idle time: `xprintidle`.
 - Foreground app: `xdotool getactivewindow getwindowname`.
 
-Install those tools with your distro package manager for accurate idle/focus tracking. If either tool is missing, the tracker falls back to always-active tracking.
+Install those tools with your distro package manager for X11 idle/focus tracking. If either tool is missing or activity cannot be read, billable tracking pauses. Wayland activity detection is unavailable.
 
 ## Resolve Scripting API Paths
 

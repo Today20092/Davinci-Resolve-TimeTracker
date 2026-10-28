@@ -4,9 +4,9 @@ This document tracks product direction and project status. The README stays focu
 
 ## Current Focus
 
-- Make the installer reliable across Windows, macOS, and Linux.
-- Keep tracking accurate by counting active Resolve work and render/export time, not unattended time.
-- Keep all data local and exportable.
+- Verify real Resolve editing performance and complete trustworthy process/resource measurements in [#52](https://github.com/Today20092/Davinci-Resolve-TimeTracker/issues/52).
+- Test a compact native Resolve UIManager utility on Windows in [#57](https://github.com/Today20092/Davinci-Resolve-TimeTracker/issues/57). The agreed experiment keeps independent Electron reporting on demand and permits a lightweight worker if needed. A full UI rewrite depends on the prototype results.
+- Preserve tracking accuracy, local history, settings and exports while changing launch or presentation behavior.
 
 ## Done
 
@@ -22,10 +22,9 @@ This document tracks product direction and project status. The README stays focu
 
 ## Next
 
-- Smoke-test macOS with a real Resolve Studio install.
-- Smoke-test Linux with a real Resolve Studio install.
-- Show a clear UI warning when Linux activity tools are missing.
-- Make duplicate launches focus the existing tracker window instead of failing invisibly.
+- Complete the native window/process/lifetime/scheduling feasibility checks before choosing its production architecture.
+- Verify missing activity information pauses billing and that closing Resolve and the dashboard releases every application process.
+- Confirm fresh macOS installation in [#54](https://github.com/Today20092/Davinci-Resolve-TimeTracker/issues/54) when a Mac is available; live macOS/X11 runtime validation remains part of #52.
 
 ## Later
 
@@ -35,11 +34,11 @@ This document tracks product direction and project status. The README stays focu
 
 ### Windows Packaged Release
 
-Build a zero-prerequisite, per-user Windows installer for regular users. The accepted design is recorded in [ADR 0002](adr/0002-windows-packaged-distribution.md).
+Packaging remains deferred in [#20](https://github.com/Today20092/Davinci-Resolve-TimeTracker/issues/20) until real editing validation and the hosting decision in #57. The distribution design is recorded in [ADR 0002](adr/0002-windows-packaged-distribution.md); it is not a statement that a packaged release exists.
 
 - Run a packaging spike and select the Electron installer and Python bundler.
 - Produce an unsigned Windows 10/11 x64 preview through GitHub Releases.
-- Support Start Menu, Resolve Scripts menu, tray startup, and legacy script-install migration.
+- Support explicit Start Menu and Resolve Scripts menu launchers and legacy script-install migration. Do not install a login watcher or tray startup.
 - Prove rollback-safe upgrades and native uninstall with data preserved by default.
 - Pass the clean-machine lifecycle test matrix.
 - Add code signing and checksums before declaring the installer production-ready.
