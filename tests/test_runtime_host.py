@@ -109,11 +109,11 @@ class RuntimeHostTest(unittest.TestCase):
                 now=lambda: now + timedelta(seconds=clock[0]),
             )
             runtime.observe()
-            clock[0] = 10
+            clock[0] = 5
             runtime.observe()
-            clock[0] = 60
+            clock[0] = 20
             self.assertEqual("paused", api.pause()["tracking_status"])
-            self.assertEqual("2026-01-01T00:00:10Z", api.sessions()[0]["ended_at_utc"])
+            self.assertEqual("2026-01-01T00:00:00Z", api.sessions()[0]["ended_at_utc"])
 
     def test_late_resolve_observation_does_not_bill_the_unobserved_interval(self):
         now = datetime(2026, 1, 1, tzinfo=timezone.utc)

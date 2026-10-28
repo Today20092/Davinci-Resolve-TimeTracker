@@ -136,15 +136,17 @@ class TrackingRuntime:
     def pause(self, observed_at: datetime | None = None) -> None:
         with self._lock:
             self._control_generation += 1
+            paused_at = observed_at or self._now()
+            heartbeat = self.engine.last_heartbeat_at
             if (
-                self._last_observed_at is not None
-                and time.monotonic() - self._last_observed_at > STALE_HEARTBEAT_SECONDS
+                heartbeat is not None
+                and (paused_at - heartbeat).total_seconds() > STALE_HEARTBEAT_SECONDS
             ):
-                self._snapshot = self.engine.poll(
-                    observed_at or self._now(),
+                self.engine.poll(
+                    paused_at,
                     RuntimeSnapshot(None, None, False, None, None),
                 )
-            self.engine.pause(observed_at or self._now())
+            self.engine.pause(paused_at)
 
     def resume(self) -> None:
         with self._lock:

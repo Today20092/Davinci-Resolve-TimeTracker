@@ -51,6 +51,10 @@ class TrackingEngine:
     def tracking_enabled(self) -> bool:
         return self._tracking_enabled
 
+    @property
+    def last_heartbeat_at(self) -> datetime | None:
+        return self._last_heartbeat_at
+
     def read_snapshot(self) -> RuntimeSnapshot:
         return self._snapshot_provider.snapshot()
 
