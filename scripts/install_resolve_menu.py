@@ -92,7 +92,7 @@ from pathlib import Path
 
 _probe_globals = runpy.run_path(
     {str(source)!r},
-    init_globals={{"resolve": resolve, "fusion": fusion, "bmd": bmd}},
+    init_globals={{"resolve": resolve, "fusion": fusion, "bmd": bmd, "native_probe_menu_worker": True}},
     run_name="__main__",
 )
 _probe_result = _probe_globals.get("PROBE_RESULT", {{}})

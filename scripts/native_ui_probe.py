@@ -14,7 +14,7 @@ from typing import Any
 WINDOW_ID = "com.resolve-time-tracker.NativeProbe"
 
 
-def run_probe(resolve, fusion, bmd, *, report_path=None):
+def run_probe(resolve, fusion, bmd, *, report_path=None, menu_worker=False):
     ui = fusion.UIManager
     existing = ui.FindWindow(WINDOW_ID)
     if existing:
@@ -41,11 +41,16 @@ def run_probe(resolve, fusion, bmd, *, report_path=None):
         "pid": os.getpid(),
         "parent_pid": os.getppid(),
         "python": sys.version,
+        "executable": sys.executable,
         "platform": platform.platform(),
         "sqlite_available": capabilities["sqlite3"],
         "ctypes_available": capabilities["ctypes"],
         "tracking_connected": False,
         "periodic_scheduler_verified": False,
+        "periodic_scope": "menu_worker_readonly_resolve"
+        if menu_worker
+        else "not_tested",
+        "periodic_callbacks": [],
         "report_path": str(report_path),
         "hidden_count": 0,
         "stopped": False,
@@ -91,6 +96,7 @@ def run_probe(resolve, fusion, bmd, *, report_path=None):
                 ui.Button(
                     {"ID": "Dispatch", "Text": "Run 10 queued callbacks (not a timer)"}
                 ),
+                ui.Button({"ID": "Callback", "Text": "", "Hidden": True}),
                 ui.Button({"ID": "Read", "Text": "Read Resolve once (idle only)"}),
                 ui.Label({"ID": "Status", "Text": "Ready. Tracking is not connected."}),
                 ui.Label({"Text": f"Report: {escape(str(report_path))}"}),
@@ -105,7 +111,6 @@ def run_probe(resolve, fusion, bmd, *, report_path=None):
                 "ID": WINDOW_ID,
                 "WindowTitle": "Resolve native UI probe",
                 "Geometry": [100, 100, 640, 240],
-                "Events": {"ProbeEvent": True},
             },
             layout,
         ),
@@ -133,7 +138,7 @@ def run_probe(resolve, fusion, bmd, *, report_path=None):
         queued_at = time.monotonic()
         report["dispatch_queued"] += 1
         report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
-        ui.QueueEvent(window, "ProbeEvent", {})
+        ui.QueueEvent(window.Find("Callback"), "Clicked", {})
 
     def start_dispatch(event):
         nonlocal dispatch_active
@@ -184,6 +189,7 @@ def run_probe(resolve, fusion, bmd, *, report_path=None):
             report["resolve_read"] = {
                 "available": False,
                 "error_type": type(error).__name__,
+                "duration_seconds": time.monotonic() - started_at,
             }
             window.Find(
                 "Status"
@@ -196,12 +202,44 @@ def run_probe(resolve, fusion, bmd, *, report_path=None):
         window.On["Stop"].Clicked = stop
         window.On["Dispatch"].Clicked = start_dispatch
         window.On["Read"].Clicked = read_resolve
-        window.On[WINDOW_ID].ProbeEvent = dispatch
+        window.On["Callback"].Clicked = dispatch
+
+    def worker_loop():
+        step_loop = getattr(dispatcher, "StepLoop", None)
+        if not callable(step_loop):
+            raise RuntimeError(
+                "This host does not expose UIDispatcher.StepLoop(wait=False)."
+            )
+        started_at = time.monotonic()
+        next_tick = started_at + 5.0
+        start_dispatch(None)
+        while not report["stopped"] and len(report["periodic_callbacks"]) < 3:
+            step_loop(wait=False)
+            if report["stopped"]:
+                break
+            now = time.monotonic()
+            if now >= next_tick:
+                read_resolve(None)
+                report["periodic_callbacks"].append(
+                    {
+                        "elapsed_seconds": now - started_at,
+                        "resolve_read": report["resolve_read"],
+                    }
+                )
+                report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+                next_tick = time.monotonic() + 5.0
+            time.sleep(max(0.0, min(0.05, next_tick - time.monotonic())))
+        if not report["stopped"]:
+            report["periodic_scheduler_verified"] = True
+            report["stop_reason"] = "periodic_limit"
+            stop(None)
 
     phase("handlers", handlers)
     phase("show", window.Show)
     try:
-        phase("run_loop", dispatcher.RunLoop)
+        phase("worker_loop", worker_loop) if menu_worker else phase(
+            "run_loop", dispatcher.RunLoop
+        )
     finally:
         window.Hide()
     return report
@@ -212,7 +250,12 @@ def main(namespace):
         raise RuntimeError(
             "Run this probe from Resolve's Python console or a native Scripts-menu entry."
         )
-    return run_probe(namespace.get("resolve"), namespace["fusion"], namespace["bmd"])
+    return run_probe(
+        namespace.get("resolve"),
+        namespace["fusion"],
+        namespace["bmd"],
+        menu_worker=namespace.get("native_probe_menu_worker", False),
+    )
 
 
 if __name__ == "__main__":

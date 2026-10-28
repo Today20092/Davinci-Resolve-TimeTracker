@@ -24,7 +24,8 @@ directory. The window displays the report path.
 - An explicit button queues ten bounded no-op callbacks and records callback
   latency. These callbacks are **not a periodic scheduler**. No UI calls are made
   from a background Python thread and no timer API is guessed.
-- Another explicit button reads project/Page/rendering state once. It displays the
+- An explicit button reads project/Page/rendering state once. The opt-in menu
+  worker also performs that read on each of its three bounded periodic ticks. It displays the
   project name locally but omits it from the JSON report. Read failures are
   explicit; no observation creates a billable Session.
 
@@ -81,7 +82,8 @@ then choose **Workspace > Scripts > ResolveTimeTrackerNativeProbe**. The entry
 executes the probe using the menu's own `resolve`, `fusion` and `bmd` objects;
 it does not create an external scripting connection.
 
-The entry adds `menu_invocation_returned: true` to the probe's temporary report
+The entry opts into the bounded separate-worker experiment described below. It
+adds `menu_invocation_returned: true` to the probe's temporary report
 only after the entire `runpy` invocation returns. A report ending at
 `after_run_loop` without that marker is not proof of full menu return. A second
 activation that only focuses an existing window creates no report of its own.
@@ -96,17 +98,67 @@ Both modes accept `--utility-dir` for isolated test locations. Installation and
 removal refuse a file with different contents, and cleanup removes only the
 matching generated probe entry. Remove it before deleting/moving the checkout.
 
-The callback probe now explicitly enables `ProbeEvent` in the window's `Events`
-attribute. The first-party Workflow Integrations README, lines 340–344, states
-that event handlers can be enabled/disabled there and only common events such as
-Clicked/Close are enabled by default. A boundary test models that filtering and
-reproduces zero callback delivery without the declaration. This is a documented
-API configuration correction, not yet proof of real host delivery.
+The first menu trial explicitly enabled `ProbeEvent` in the window's `Events`
+attribute, but still delivered zero callbacks after one queued event. Enabling an
+arbitrary event name did not establish a native event signal. The probe now queues
+the documented default `Clicked` signal of a dedicated hidden Button, separate
+from the start button. A boundary test that drops arbitrary event names failed
+before that change and passes afterward. The ten-callback bound and timing state
+remain independent of event payloads. Actual delivery still requires the live
+trial; this correction does not establish a periodic timer.
 
 Context7's Fusion Script Docs reference describes `UITimer.Start`, `Stop` and
 `Interval`, but the fetched material does not establish how to create/register
-one in this host or a supported timeout-handler API. The menu experiment does
-not claim a periodic scheduler or guess those calls.
+one in this host or a supported timeout-handler API. Those timer calls remain
+unverified; the worker experiment below uses the actually exported StepLoop API
+instead.
+
+### First dedicated-menu observations
+
+The parent observed the native window launched through the dedicated menu in a
+separate bundled `fuscript.exe` worker, PID 30840, rather than in the Resolve
+process. Its Python version was 3.13.14. The report was written to a new temporary
+`resolve-native-probe-unimmpn2` directory. Hide incremented `hidden_count` to one
+while that worker remained alive. Activating the same menu entry restored the
+same window and report without another probe directory or persistent controller.
+This establishes menu-context hide/reopen behavior for that trial, not periodic
+tracking or production history integration. The parent subsequently observed
+`menu_invocation_returned: true` after Stop and confirmed that worker PID exited.
+
+### Bounded worker scheduling experiment
+
+Runtime inspection of the installed `bmd.UIDispatcher` Python binding exposed
+`StepLoop(self, wait=False)` and `Dispatch(self, ev)`. This is evidence from the
+shipped callable API, not a guessed timer method. The generated menu entry now
+passes an explicit worker opt-in. Only that mode drives nonblocking
+`StepLoop(wait=False)` on the menu worker's own thread, with standard-library
+monotonic timing and short sleeps between event-pump steps. The console launch
+keeps the original RunLoop path; do not opt a Resolve-process console into the
+sleeping worker loop.
+
+The worker automatically queues ten bounded native Button Clicked callbacks and
+records three periodic ticks, waiting five seconds after each tick's work. It then
+stops and returns after about fifteen seconds plus read latency, unless Stop is
+clicked earlier. Missing StepLoop produces an explicit unsupported-host failure.
+No tick records a Session. The report only marks `periodic_scheduler_verified`
+after all three ticks; this alone is not a claim of production tracking safety.
+
+The fake SDK/clock regression verifies nonblocking steps, exact worked-example
+tick times of 5, 10 and 15 seconds, bounded callback delivery and cleanup. The
+actual worker's cadence and full-invocation return were then tested by the parent.
+The no-op trial report recorded a separate `fuscript.exe` worker, ten queued and
+ten delivered callbacks with approximately 0.024–0.058 second latency, and ticks
+at 5.000858, 10.001676 and 15.002405 seconds. It recorded `after_worker_loop`,
+`periodic_limit` and `menu_invocation_returned: true`; the worker then exited.
+That report's scope is `menu_worker_noop_only`, not a Resolve-observation test.
+
+The next code slice reuses the existing read-only project/Page/render callback
+on each tick and records its availability, state and latency inside that tick.
+The scope is now `menu_worker_readonly_resolve`; errors include only exception
+type and elapsed time, never private project names or error text. A fake SDK
+success/failure regression covers these records, but live playback/rendering
+evidence for this slice is still pending. No new thread, native timer,
+dependency, billing engine or production tracker was introduced.
 
 ## Live evidence checklist
 
