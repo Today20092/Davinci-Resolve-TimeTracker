@@ -14,9 +14,18 @@ from typing import Any
 WINDOW_ID = "com.resolve-time-tracker.NativeProbe"
 
 
-def run_probe(resolve, fusion, bmd, *, report_path=None, menu_worker=False):
+def run_probe(
+    resolve, fusion, bmd, *, report_path=None, menu_worker=False, bootstrap_phase=None
+):
+    if bootstrap_phase:
+        bootstrap_phase("before_ui_manager")
     ui = fusion.UIManager
+    if bootstrap_phase:
+        bootstrap_phase("after_ui_manager")
+        bootstrap_phase("before_find_window")
     existing = ui.FindWindow(WINDOW_ID)
+    if bootstrap_phase:
+        bootstrap_phase("after_find_window")
     if existing:
         existing.Show()
         existing.Raise()
@@ -62,6 +71,8 @@ def run_probe(resolve, fusion, bmd, *, report_path=None, menu_worker=False):
 
     def phase(name, operation):
         report["phase"] = f"before_{name}"
+        if bootstrap_phase:
+            bootstrap_phase(report["phase"])
         report["phases"].append(report["phase"])
         report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
         try:
@@ -73,6 +84,8 @@ def run_probe(resolve, fusion, bmd, *, report_path=None, menu_worker=False):
             report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
             raise
         report["phase"] = f"after_{name}"
+        if bootstrap_phase:
+            bootstrap_phase(report["phase"])
         report["phases"].append(report["phase"])
         report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
         return result
@@ -246,6 +259,9 @@ def run_probe(resolve, fusion, bmd, *, report_path=None, menu_worker=False):
 
 
 def main(namespace):
+    bootstrap_phase = namespace.get("native_probe_bootstrap_phase")
+    if bootstrap_phase:
+        bootstrap_phase("before_host_context")
     if not namespace.get("fusion") or not namespace.get("bmd"):
         raise RuntimeError(
             "Run this probe from Resolve's Python console or a native Scripts-menu entry."
@@ -254,7 +270,9 @@ def main(namespace):
         namespace.get("resolve"),
         namespace["fusion"],
         namespace["bmd"],
+        report_path=namespace.get("native_probe_report_path"),
         menu_worker=namespace.get("native_probe_menu_worker", False),
+        bootstrap_phase=bootstrap_phase,
     )
 
 

@@ -1,8 +1,10 @@
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+from scripts.install_resolve_menu import native_probe_launcher_text
 from scripts.native_ui_probe import WINDOW_ID, main, run_probe
 
 
@@ -77,6 +79,36 @@ class Host:
 
     def ExitLoop(self):
         self.exited = True
+
+
+def test_menu_bootstrap_records_before_first_sdk_access_and_sanitizes_failure(
+    tmp_path, monkeypatch
+):
+    invocation = tmp_path / "invocation"
+    invocation.mkdir()
+    monkeypatch.setattr("tempfile.mkdtemp", lambda **kwargs: str(invocation))
+
+    class UnavailableFusion:
+        @property
+        def UIManager(self):
+            report = json.loads((invocation / "bootstrap.json").read_text())
+            assert report["phase"] == "before_ui_manager"
+            assert report["phases"][0]["phase"] == "menu_entered"
+            assert report["phases"][0]["elapsed_seconds"] >= 0
+            raise RuntimeError("private project and media path")
+
+    with pytest.raises(RuntimeError, match="private project"):
+        exec(
+            native_probe_launcher_text(Path(__file__).parents[1]),
+            {"fusion": UnavailableFusion(), "resolve": object(), "bmd": object()},
+        )
+
+    report = json.loads((invocation / "bootstrap.json").read_text())
+    assert report["phase"] == "failed"
+    assert report["failed_phase"] == "before_ui_manager"
+    assert report["error_type"] == "RuntimeError"
+    assert "private project" not in json.dumps(report)
+    assert not report.get("menu_invocation_returned", False)
 
 
 def test_probe_records_capabilities_in_disposable_report(tmp_path):
