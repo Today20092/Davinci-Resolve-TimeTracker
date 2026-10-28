@@ -1,7 +1,12 @@
 import shutil
 import os
+import json
+import multiprocessing
+import subprocess
+import sys
 import time
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -10,6 +15,7 @@ from resolve_time_tracker.api import ApiState
 from resolve_time_tracker.database import SQLiteStore
 from resolve_time_tracker.isolated_resolve_bridge import IsolatedResolveBridge
 from resolve_time_tracker.runtime_host import RuntimeHost
+from resolve_time_tracker.tracked_launch import ProcessWatch
 from resolve_time_tracker.tracking_engine import TrackingEngine
 from resolve_time_tracker.tracking_runtime import TrackingRuntime
 
@@ -35,6 +41,97 @@ def ready_snapshot(bridge):
         except TimeoutError:
             assert time.monotonic() < deadline
             time.sleep(0.05)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows job ownership acceptance")
+def test_hard_parent_exit_kills_its_gil_blocked_sdk_child(tmp_path):
+    import ctypes
+    from ctypes import wintypes
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel.OpenProcess.restype = wintypes.HANDLE
+    kernel.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
+    kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+    report = tmp_path / "parent.json"
+    parent = subprocess.Popen(
+        [
+            sys.executable,
+            str(Path(__file__).parent / "fixtures/isolated_sdk_parent.py"),
+            str(sdk_file(tmp_path)),
+            str(report),
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        creationflags=subprocess.CREATE_NO_WINDOW,
+    )
+    watch = None
+    handle = None
+    try:
+        deadline = time.monotonic() + 15
+        while not report.exists():
+            assert parent.poll() is None, parent.communicate(timeout=1)[1]
+            assert time.monotonic() < deadline
+            time.sleep(0.01)
+        child_pid = json.loads(report.read_text())["sdk_reader_pid"]
+        watch = ProcessWatch(child_pid)
+        handle = kernel.OpenProcess(0x00100001, False, child_pid)
+        assert handle and watch.alive()
+        assert (tmp_path / "entered").exists()
+        parent.terminate()
+        parent.wait(timeout=5)
+        deadline = time.monotonic() + 1
+        while watch.alive() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert not watch.alive()
+    finally:
+        if parent.poll() is None:
+            parent.terminate()
+        parent.wait(timeout=5)
+        if handle:
+            if watch is not None and watch.alive():
+                kernel.TerminateProcess(handle, 1)
+            kernel.CloseHandle(handle)
+        if watch is not None:
+            watch.close()
+        if parent.stderr is not None:
+            parent.stderr.close()
+
+
+def test_dead_sdk_child_is_reaped_before_a_replacement_can_recover(tmp_path):
+    bridge = IsolatedResolveBridge(sdk_file(tmp_path), Active(), timeout_seconds=1)
+    try:
+        assert ready_snapshot(bridge).project_name == "Test project"
+        child_pid = bridge.diagnostics()["sdk_reader_pid"]
+        child = next(p for p in multiprocessing.active_children() if p.pid == child_pid)
+        child.terminate()
+        child.join(timeout=5)
+        with pytest.raises(RuntimeError, match="exited"):
+            bridge.snapshot()
+        assert ready_snapshot(bridge).project_name == "Test project"
+        assert bridge.diagnostics()["sdk_reader_pid"] != child_pid
+    finally:
+        bridge.close()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows job ownership acceptance")
+def test_job_setup_failure_stops_child_before_any_sdk_request(tmp_path):
+    import ctypes
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    bridge = IsolatedResolveBridge(sdk_file(tmp_path), Active(), timeout_seconds=1)
+    (tmp_path / "block").touch()
+    try:
+        with (
+            patch("ctypes.WinDLL", return_value=kernel),
+            patch.object(kernel, "SetInformationJobObject", return_value=False),
+            pytest.raises(OSError),
+        ):
+            bridge.snapshot()
+        assert not bridge.diagnostics()["sdk_reader_alive"]
+        assert not (tmp_path / "entered").exists()
+    finally:
+        bridge.close()
 
 
 def test_managed_runtime_uses_an_owned_sdk_child_by_default(tmp_path, monkeypatch):
