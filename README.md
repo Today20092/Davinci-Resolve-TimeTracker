@@ -45,7 +45,13 @@ Windows users who prefer a one-command install can run:
 irm https://raw.githubusercontent.com/Today20092/Davinci-Resolve-TimeTracker/main/install.ps1 | iex
 ```
 
-This downloads and immediately runs the installer. Use the download link above instead if you want to inspect the script before running it.
+macOS users who prefer a one-command install can run this in Terminal:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Today20092/Davinci-Resolve-TimeTracker/main/install.sh | sh
+```
+
+These commands download and immediately run the installer. Use the download links above instead if you want to inspect the script before running it.
 
 If Windows blocks `install.ps1`, open PowerShell in your Downloads folder and run:
 
