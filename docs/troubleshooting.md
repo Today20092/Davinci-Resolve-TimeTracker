@@ -29,9 +29,9 @@ No tracker starts at login or waits for future Resolve sessions. Rerun the insta
 
 Rerun the installer to build the dashboard and install its dependencies. Ordinary launches start the prebuilt Electron app directly. Only development mode uses pnpm to start Vite and Electron.
 
-## Linux counts time while idle
+## Linux activity is unavailable
 
-Install `xprintidle` and `xdotool` with the distribution package manager. Without them, the tracker cannot reliably detect idle time or the foreground window and falls back to always-active tracking.
+On X11, install `xprintidle` and `xdotool` with the distribution package manager. Missing tools, command failures or inaccessible display information make activity unavailable and pause billable tracking. Wayland activity detection is unavailable. Check the dashboard's error details instead of assuming time is being recorded.
 
 ## The installer reports a missing prerequisite
 

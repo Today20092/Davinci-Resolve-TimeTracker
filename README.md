@@ -63,7 +63,7 @@ The headless runtime records the Resolve session without an Electron window. Ope
 
 Closing the dashboard exits Electron. Tracking continues while the tracked Resolve session is open. After Resolve closes, the runtime remains only if the dashboard is still open; closing both ends the runtime. Nothing remains running between sessions. Ordinary dashboard launches use the installed build without running pnpm or rebuilding assets.
 
-For Linux activity detection, install `xprintidle` and `xdotool` with your distro package manager. Without them, the tracker can still run, but it falls back to always-active tracking.
+For X11 activity detection on Linux, install `xprintidle` and `xdotool` with your distro package manager. Missing tools or unavailable activity information pause billable tracking. Wayland activity detection is unavailable.
 
 ### Update
 
