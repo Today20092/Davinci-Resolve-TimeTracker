@@ -166,3 +166,38 @@ def test_stop_exits_even_if_report_can_no_longer_be_saved(tmp_path):
         run_probe(None, host, host, report_path=target)
     assert host.exited is True
     assert host.windows[WINDOW_ID].visible is False
+
+
+def test_probe_records_sdk_phase_before_a_failure_without_private_error_text(tmp_path):
+    class BrokenDispatcher(Host):
+        def UIDispatcher(self, ui):
+            raise RuntimeError("private host detail")
+
+    host = BrokenDispatcher()
+    target = tmp_path / "probe.json"
+    with pytest.raises(RuntimeError):
+        run_probe(None, host, host, report_path=target)
+    report = json.loads(target.read_text())
+    assert report["phase"] == "failed"
+    assert report["failed_phase"] == "dispatcher"
+    assert report["error_type"] == "RuntimeError"
+    assert "private host detail" not in target.read_text()
+
+
+def test_probe_reports_completed_host_phases(tmp_path):
+    host = Host()
+    result = run_probe(None, host, host, report_path=tmp_path / "probe.json")
+    assert result["phases"] == [
+        "before_dispatcher",
+        "after_dispatcher",
+        "before_layout",
+        "after_layout",
+        "before_window",
+        "after_window",
+        "before_handlers",
+        "after_handlers",
+        "before_show",
+        "after_show",
+        "before_run_loop",
+        "after_run_loop",
+    ]

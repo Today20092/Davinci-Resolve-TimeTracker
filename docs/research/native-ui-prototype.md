@@ -93,6 +93,34 @@ No live check is marked passed by this document. The automated test is against a
 fake SDK/GUI boundary; it verifies our handler behavior, report/privacy rules,
 bounded callback count, reuse and stop cleanup, not the native host.
 
+## Initial Windows host attempt
+
+The parent agent launched the probe from the Python console of Resolve on Windows
+11 build 26200, with a saved disposable project. The initial temporary JSON
+reported PID 32324, matching the independently observed Resolve PID, Python
+3.13.14, and successful SQLite/ctypes checks. This is direct evidence for that
+console context. It does not establish the Scripts-menu interpreter or justify
+changing the project's supported Python versions. The separate bundled Python
+3.14 executable is a different runtime.
+
+No native probe window was observed after approximately thirty seconds. The
+initial report was written before dispatcher construction, so it could not
+distinguish a dispatcher, layout, window or event-loop problem. No callback or
+read result was recorded. Resolve remained responsive to the parent's UI checks;
+this is not a successful native UI/lifetime result.
+
+The probe now writes before/after phase markers around dispatcher creation,
+layout construction, AddWindow, handler setup, Show and RunLoop. Each write is
+closed before calling the SDK. An exception records its phase and exception type
+without private error text and is re-raised. A hanging call leaves the last
+`before_*` marker available for inspection. The parent controls stopping the old
+attempt and any retry; no retry should run alongside a possibly active dispatcher.
+
+The layout call matches the shipped sample's `AddWindow(properties,
+ui.VGroup([children]))` shape. Its validity in this actual console still requires
+live confirmation; accepting that shape in a fake test is not evidence of SDK
+compatibility.
+
 ## Automated checks
 
 ```text

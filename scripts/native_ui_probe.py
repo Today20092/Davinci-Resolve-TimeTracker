@@ -50,16 +50,31 @@ def run_probe(resolve, fusion, bmd, *, report_path=None):
         "hidden_count": 0,
         "stopped": False,
         "dispatch_callbacks": [],
+        "phases": [],
     }
     report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
-    dispatcher = bmd.UIDispatcher(ui)
-    window = dispatcher.AddWindow(
-        {
-            "ID": WINDOW_ID,
-            "WindowTitle": "Resolve native UI probe",
-            "Geometry": [100, 100, 640, 240],
-        },
-        ui.VGroup(
+
+    def phase(name, operation):
+        report["phase"] = f"before_{name}"
+        report["phases"].append(report["phase"])
+        report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+        try:
+            result = operation()
+        except BaseException as error:
+            report.update(
+                phase="failed", failed_phase=name, error_type=type(error).__name__
+            )
+            report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+            raise
+        report["phase"] = f"after_{name}"
+        report["phases"].append(report["phase"])
+        report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+        return result
+
+    dispatcher = phase("dispatcher", lambda: bmd.UIDispatcher(ui))
+    layout = phase(
+        "layout",
+        lambda: ui.VGroup(
             [
                 ui.Label(
                     {
@@ -80,6 +95,17 @@ def run_probe(resolve, fusion, bmd, *, report_path=None):
                 ui.Label({"Text": f"Report: {escape(str(report_path))}"}),
                 ui.Button({"ID": "Stop", "Text": "Stop probe"}),
             ]
+        ),
+    )
+    window = phase(
+        "window",
+        lambda: dispatcher.AddWindow(
+            {
+                "ID": WINDOW_ID,
+                "WindowTitle": "Resolve native UI probe",
+                "Geometry": [100, 100, 640, 240],
+            },
+            layout,
         ),
     )
 
@@ -142,15 +168,18 @@ def run_probe(resolve, fusion, bmd, *, report_path=None):
             ).Text = "Resolve read unavailable. No time is being billed."
         report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
 
-    window.On[WINDOW_ID].Close = hide
-    window.On["Hide"].Clicked = hide
-    window.On["Stop"].Clicked = stop
-    window.On["Dispatch"].Clicked = dispatch
-    window.On["Read"].Clicked = read_resolve
-    window.On[WINDOW_ID].ProbeEvent = dispatch
-    window.Show()
+    def handlers():
+        window.On[WINDOW_ID].Close = hide
+        window.On["Hide"].Clicked = hide
+        window.On["Stop"].Clicked = stop
+        window.On["Dispatch"].Clicked = dispatch
+        window.On["Read"].Clicked = read_resolve
+        window.On[WINDOW_ID].ProbeEvent = dispatch
+
+    phase("handlers", handlers)
+    phase("show", window.Show)
     try:
-        dispatcher.RunLoop()
+        phase("run_loop", dispatcher.RunLoop)
     finally:
         window.Hide()
     return report
