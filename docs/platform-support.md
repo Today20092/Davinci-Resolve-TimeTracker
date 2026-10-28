@@ -19,11 +19,18 @@ Activity detection:
 
 ## macOS
 
-Status: fresh installation, installed dashboard, and repeated Resolve menu launch
-verified on Apple Silicon macOS 27.0.1 with Resolve Studio 21.1.1.10; see the
-[installation results](research/ticket-54-macos-acceptance.md). Broader runtime
-acceptance remains partial; see the [Mac runtime results](research/ticket-58-macos-acceptance.md),
-including the blocked SDK child limit after a parent crash.
+Status: local smoke tests passed on Apple Silicon macOS 27.0.1 with Resolve
+Studio 21.1.1.10. Current development includes the Mac foreground process-name
+fix; published `v0.1.2-alpha.1` predates it. Fresh installation, installed launch,
+foreground/page tracking, idle pause/resume, permission denial/recovery, rendering,
+and normal process ownership have live evidence. See the
+[installation results](research/ticket-54-macos-acceptance.md) and
+[Mac runtime results](research/ticket-58-macos-acceptance.md).
+
+These results cover one Mac configuration. A controlled foreground playback run
+recorded 51 seconds during a 51.027-second measurement window; broader exact
+billing accuracy remains unqualified. After a parent crash, a blocked SDK child
+can survive until its SDK call returns. Normal shutdown stops the owned child.
 
 Install:
 
@@ -36,7 +43,9 @@ Activity detection:
 - Idle time: `ioreg`.
 - Foreground app: `osascript` asking System Events for the frontmost process.
 
-macOS may require Accessibility permission for foreground-app detection. If tracking does not pause when switching apps, check macOS privacy permissions.
+macOS may request permission to automate System Events for foreground detection.
+Check **System Settings > Privacy & Security > Automation** under the application
+that launched the tracker. Denying that permission pauses billable tracking.
 
 ## Linux
 

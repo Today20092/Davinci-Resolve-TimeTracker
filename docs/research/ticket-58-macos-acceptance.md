@@ -2,9 +2,11 @@
 
 Date: 2026-10-28. Source tested: `75e84869931d5dfec494f9c5eb59c98a551aa2d6`
 (`0.1.2-alpha.1` release source). Host: macOS 27.0.1 (26A434), arm64,
-Python 3.13.14, uv 0.12.19. This is partial evidence for
-[#58](https://github.com/Today20092/Davinci-Resolve-TimeTracker/issues/58),
-not native Mac/X11 acceptance. Fresh installation is tracked separately in #54.
+Python 3.13.14, uv 0.12.19. This report contains staged evidence for
+[#58](https://github.com/Today20092/Davinci-Resolve-TimeTracker/issues/58).
+The automatic follow-up below completes the local Mac checks with recorded
+limits; native X11 remains unverified. Fresh installation is tracked separately
+in #54. Later source revisions are identified in the follow-up sections.
 
 ## Native activity and disposable ownership results
 
@@ -46,7 +48,10 @@ tests cover denied commands, malformed data, missing Linux tools/display,
 Wayland unavailability, cache cadence, and SDK responsiveness/cleanup. Simulated
 platform tests on a Mac do not establish native X11 behavior.
 
-## Remaining live acceptance
+## Remaining acceptance after the manual phase
+
+This list records the manual-phase boundary. The automatic follow-up below
+supersedes the Mac idle and absent-process gaps.
 
 - Verify inactivity-threshold pause/resume. The owner explicitly skipped this
   manual test after only 20–30 seconds without input; it remains unverified.
@@ -171,3 +176,41 @@ ChatGPT Automation grant; Resolve's separate grant stayed enabled throughout.
 The idle gate is intentionally unverified, native X11 remains outside this
 session, and real absent-process command tracing remains open. Neither these
 passes nor the regression fix remove the blocked SDK-child parent-crash limit.
+
+## Automatic completion on combined development source
+
+At the owner's request, the remaining Mac checks ran without further human
+interaction on source `40d00d8a3097c7599f724346b8a5e57751ebd06e`. This combines
+development `0c80e0d` with Mac acceptance `baf010d`, preserving the reorganized
+README and one-command installation instructions. Runtime source includes the
+foreground fix. A new disposable database and the saved acceptance project were
+used; no personal history, projects, media, or privacy permissions were changed.
+
+| Check | Result and evidence |
+| --- | --- |
+| Native idle pause | Pass: Resolve remained foreground. With a 60-second test threshold, status changed from active/editing to idle/paused at native idle 75.6 seconds (85.4 seconds into observation). The extra delay is consistent with 15-second cached activity sampling plus runtime polling. |
+| Resume after idle | Pass: an automated Save input in the disposable project reset native idle; status returned to active/editing with Resolve still foreground and native idle 7.2 seconds. The idle threshold was restored to 300 seconds before playback. |
+| Foreground playback measurement | Pass for this workload: the 20-second, 24 fps synthetic timeline played from `00:00:00:00` to `00:00:20:00`. Across a 51.027-second observation window around playback, the saved editing row was 51 seconds. All 50 native samples were foreground and below the idle threshold; the SDK reader was pending in 4 samples. Maximum latency for a pair of status/diagnostic requests was 0.007 seconds. This sample showed no measurable lost whole seconds; it does not certify all playback workloads. |
+| Real Resolve absence | Pass at the actual command boundary: temporary PATH wrappers logged only command name and timestamp, then exec'd the unchanged native `ioreg`/`osascript` binaries. Before exit, each command ran 26 times. After real Resolve exit was confirmed by process lookup and reporting/resolve_closed status, both counts stayed exactly 26 for 45.02 seconds (three sample intervals): zero new activity commands. No wrapper replaced activity results. |
+| Reporting and final owner shutdown | Pass: reports remained visible after Resolve exited. Closing Electron released runtime PID 65858 and SDK reader PID 65862 and removed runtime metadata. |
+| Normal close during blocked SDK call | Pass: disposable parent PID 59321 / SDK child 59329; `bridge.close()` stopped the child in 0.001 seconds, confirmed through `ProcessWatch` and diagnostics. |
+| Parent crash during blocked SDK call | Recorded limit: after disposable parent 59353 received SIGKILL, child 59355 survived the 1.2-second checkpoint and exited naturally 29.034 seconds after parent death, once the 30-second GIL-holding fixture returned. No cleanup kill was needed. An indefinitely blocked real SDK call still has no automatic cleanup deadline on Mac. |
+
+The activity wrappers were confined to the disposable runtime's PATH. Observer
+probes used the ordinary native binaries and were not included in the runtime's
+command counts. The wrapper log contains no command output, app names, project
+names, media paths, or runtime tokens. All temporary probe children were
+confirmed exited; the new test database retains the normal 300-second setting.
+
+Combined-source verification passed: Python formatting/lint, 152 Python tests
+(4 platform skips, 37 subtests), frontend lint/typecheck, 29 frontend tests, and
+production build. The existing 705.51 kB minified chunk warning remains. Focused
+isolated SDK verification passed 4 tests, with 2 Windows-only skips.
+
+**Final local status:** Mac smoke checks are good so far on this Apple Silicon
+macOS 27.0.1 / Resolve Studio 21.1.1.10 configuration. Foreground/page tracking,
+idle pause/resume, actual permission denial/recovery, the measured playback and
+render workloads, command suppression after Resolve exit, and normal process
+ownership have evidence. Native X11 remains open in #58. Broader exact billing
+accuracy and indefinitely blocked SDK-child cleanup remain explicit limits;
+these checks do not qualify a stable release or a new published artifact.

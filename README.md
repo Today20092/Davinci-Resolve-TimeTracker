@@ -23,7 +23,7 @@ Open the release page below, expand **Assets**, and download **Source code**. Al
 | Platform | Download | Setup and support |
 | --- | --- | --- |
 | Windows | [v0.1.2-alpha.1 source](https://github.com/Today20092/Davinci-Resolve-TimeTracker/releases/tag/v0.1.2-alpha.1) | [Source setup](docs/usage.md#install-the-published-alpha). Exercised with Resolve Studio 21.1.1.10. |
-| macOS | [v0.1.2-alpha.1 source](https://github.com/Today20092/Davinci-Resolve-TimeTracker/releases/tag/v0.1.2-alpha.1) | [Source setup](docs/usage.md#install-the-published-alpha). Real-machine testing remains outstanding. |
+| macOS | [v0.1.2-alpha.1 source](https://github.com/Today20092/Davinci-Resolve-TimeTracker/releases/tag/v0.1.2-alpha.1) | [Source setup](docs/usage.md#install-the-published-alpha). Current development has live Apple Silicon testing; the published alpha predates the Mac foreground fix. |
 | Linux | [v0.1.2-alpha.1 source](https://github.com/Today20092/Davinci-Resolve-TimeTracker/releases/tag/v0.1.2-alpha.1) | [Source setup](docs/usage.md#install-the-published-alpha). X11 needs `xprintidle` and `xdotool`; Wayland activity detection is unavailable. |
 
 Close Resolve and the dashboard and back up `tracker.sqlite3` before updating. The [installation and usage guide](docs/usage.md) also covers bootstrap scripts for current `main`, updates, and uninstalling.
@@ -67,7 +67,7 @@ The tracker counts foreground work while you are active and keeps tracking durin
 
 ## Platform support
 
-Windows has live Resolve Studio evidence. macOS and Linux support exists in code and still needs real-machine validation. See [platform support](docs/platform-support.md) for requirements and limitations.
+Windows and current macOS development source have live Resolve Studio evidence. Mac checks used Apple Silicon, macOS 27.0.1, and Resolve Studio 21.1.1.10. Linux/X11 remains unverified. See [platform support](docs/platform-support.md) for the tested workflows and remaining limits.
 
 ## Need help?
 
