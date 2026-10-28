@@ -2,11 +2,11 @@
 
 ## Version Sources and Current Status
 
-The application version is `[project].version` in [pyproject.toml](../pyproject.toml), currently `0.1.1`. Keep `src/resolve_time_tracker/__init__.py` and the root package entry in `uv.lock` synchronized with it when preparing a release. Tags use `v<version>`.
+The application version is `[project].version` in [pyproject.toml](../pyproject.toml), currently `0.1.2a1`. Keep `src/resolve_time_tracker/__init__.py` and the root package entry in `uv.lock` synchronized with it when preparing a release. Public tags use Semantic Versioning; the current release target is **`v0.1.2-alpha.1`**, a source-only alpha preview. Python metadata uses the equivalent [Python prerelease notation](https://packaging.python.org/en/latest/specifications/version-specifiers/#pre-releases), `0.1.2a1`. Published versions and assets are recorded in [GitHub Releases](https://github.com/Today20092/Davinci-Resolve-TimeTracker/releases); a source version or tag alone is not publication.
 
 [frontend/package.json](../frontend/package.json) is a private development package; its current `0.0.1` is not a second application release. When packaging is implemented, align installer and displayed application versions with the authoritative application version and update any affected lockfiles.
 
-The project remains experimental, with a Pre-Alpha classifier. Historical unsuffixed `0.x` versions do not establish stable readiness. No next version or stable release date is selected by this policy. Packaging remains deferred as recorded in the [roadmap](roadmap.md#windows-packaged-release).
+The project remains experimental, with an Alpha classifier. The 0.1.2-alpha.1 target is a compatible reliability-fix release; known playback billing and resource gaps prevent stable readiness. Historical unsuffixed `0.x` versions do not establish stable readiness. No stable release date is selected. Packaging remains deferred as recorded in the [roadmap](roadmap.md#windows-packaged-release).
 
 ## Compatibility Contract
 

@@ -1,46 +1,30 @@
 # Roadmap
 
-This document tracks product direction and project status. The README stays focused on installation and use.
+GitHub Issues own the remaining work. The [0.1.2-alpha.1 release notes](releases/0.1.2-alpha.1.md) distinguish completed fixes from known limits.
 
-## Current Focus
+## Completed for the source preview
 
-- Verify real Resolve editing performance and complete trustworthy process/resource measurements in [#52](https://github.com/Today20092/Davinci-Resolve-TimeTracker/issues/52).
-- Resolve the [reproduced playback-observation gap](research/ticket-52-acceptance.md) before treating responsive controls as proof of accurate playback billing. Native macOS/X11 validation continues in [#58](https://github.com/Today20092/Davinci-Resolve-TimeTracker/issues/58).
-- Test a compact native Resolve UIManager utility on Windows in [#57](https://github.com/Today20092/Davinci-Resolve-TimeTracker/issues/57). The agreed experiment keeps independent Electron reporting on demand and permits a lightweight worker if needed. A full UI rewrite depends on the prototype results.
-- Preserve tracking accuracy, local history, settings and exports while changing launch or presentation behavior.
+- Isolated Resolve SDK reads keep status, Pause/Resume and Stop responsive during blocked reads.
+- Late observations are discarded; stale totals and pause recovery use the Session's own persisted freshness boundary. Uncertain gaps are excluded from billing.
+- One SDK reader is reused, dead readers can recover, and Windows parent-crash ownership prevents orphaned readers.
+- Benchmarks now identify aggregate process costs and distinguish synthetic observations from SDK calls. Concurrent cached reads and heartbeat limits have regression coverage.
+- Isolated Windows install/reinstall/rollback and source-runtime shutdown checks passed. The native-window experiment recorded its idle successes and playback failures; it is not a production UI replacement.
 
-## Done
+Existing explicit launch, no login watcher, local SQLite history, CSV/PDF reports and the on-demand Electron dashboard remain the product foundation.
 
-- Resolve Scripts-menu launcher.
-- Companion window.
-- SQLite session storage.
-- CSV export.
-- Idle/focus-aware tracking on Windows.
-- macOS activity probe using `ioreg` and `osascript`.
-- Linux activity probe using `xprintidle` and `xdotool`.
-- Manual Pause/Resume Tracking.
-- Cross-platform installer wrappers.
+## Remaining work
 
-## Next
+| Priority | Ticket | Next outcome |
+| --- | --- | --- |
+| First | [#52: Windows tracking correctness and release validation](https://github.com/Today20092/Davinci-Resolve-TimeTracker/issues/52) | Restore reliable playback observations; address dashboard resource costs; validate actual installed upgrades, representative editing/long renders and recovery. |
+| Environment needed | [#54: fresh macOS installation](https://github.com/Today20092/Davinci-Resolve-TimeTracker/issues/54) | Verify the pinned-pnpm install and installed dashboard/menu launch on a real Mac. |
+| Environment needed | [#58: macOS/X11 runtime validation](https://github.com/Today20092/Davinci-Resolve-TimeTracker/issues/58) | Verify activity, ownership, shutdown and resource behavior on the actual platforms; reuse #54's installer evidence. |
+| Research | [#57: native Resolve utility](https://github.com/Today20092/Davinci-Resolve-TimeTracker/issues/57) | Prove responsive launch, scheduling and Stop during playback/render before integrating tracking. Retain on-demand reporting meanwhile. |
+| Deferred | [#13: Resolve Free compatibility](https://github.com/Today20092/Davinci-Resolve-TimeTracker/issues/13) | Investigate an actual Free environment; record unsupported APIs or edition restrictions without promising compatibility. |
+| Deferred | [#20: Windows packaged distribution](https://github.com/Today20092/Davinci-Resolve-TimeTracker/issues/20) | Revisit after real editing validation and the hosting decision; source previews do not deliver a standalone installer. |
 
-- Complete the native window/process/lifetime/scheduling feasibility checks before choosing its production architecture.
-- Verify missing activity information pauses billing and that closing Resolve and the dashboard releases every application process.
-- Confirm fresh macOS installation in [#54](https://github.com/Today20092/Davinci-Resolve-TimeTracker/issues/54) when a Mac is available; live macOS/X11 runtime validation remains part of #52.
+## Windows Packaged Release
 
-## Later
+[ADR 0002](adr/0002-windows-packaged-distribution.md) owns the distribution design. Before a production-ready installer, prove clean-machine install, launch, upgrade, rollback, uninstall and data preservation, then add code signing and published checksums. Packaging tools remain unselected. No login watcher or automatic startup is planned.
 
-- Resolve Free compatibility investigation.
-- Better session editing and review workflow.
-- More explicit platform diagnostics inside the companion UI.
-
-### Windows Packaged Release
-
-Packaging remains deferred in [#20](https://github.com/Today20092/Davinci-Resolve-TimeTracker/issues/20) until real editing validation and the hosting decision in #57. The distribution design is recorded in [ADR 0002](adr/0002-windows-packaged-distribution.md); it is not a statement that a packaged release exists.
-
-- Run a packaging spike and select the Electron installer and Python bundler.
-- Produce an unsigned Windows 10/11 x64 preview through GitHub Releases.
-- Support explicit Start Menu and Resolve Scripts menu launchers and legacy script-install migration. Do not install a login watcher or tray startup.
-- Prove rollback-safe upgrades and native uninstall with data preserved by default.
-- Pass the clean-machine lifecycle test matrix.
-- Add code signing and checksums before declaring the installer production-ready.
-- Consider macOS packaging only after the Windows lifecycle is proven.
+Session editing improvements and expanded diagnostics remain future ideas; they are not commitments in this release.

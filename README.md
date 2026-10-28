@@ -2,6 +2,8 @@
 
 > **Work in progress:** Resolve Time Tracker is working, but it is still evolving. Clone it, fork it, modify it for your own DaVinci Resolve workflow, and open pull requests if you build something useful.
 
+**0.1.2-alpha.1 source preview:** [Release notes](docs/releases/0.1.2-alpha.1.md). Pause/Resume remains responsive when Resolve scripting stalls, and stale observations no longer justify billable time. **Playback can still be undercounted**, and the dashboard exceeds resource targets. Review the known limits before relying on the preview for billing.
+
 [![DaVinci Resolve](https://img.shields.io/badge/DaVinci_Resolve-Studio-233A51?style=for-the-badge&logo=davinciresolve&logoColor=white)](https://www.blackmagicdesign.com/products/davinciresolve)
 [![Python](https://img.shields.io/badge/Python-3.10--3.13-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-sidecar-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)

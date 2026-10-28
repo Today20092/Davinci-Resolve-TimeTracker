@@ -4,7 +4,7 @@ Resolve Time Tracker is intended to run on Windows, macOS, and Linux where DaVin
 
 ## Windows
 
-Status: verified locally with DaVinci Resolve Studio 21.
+Status: locally exercised with DaVinci Resolve Studio 21.1.1.10. Playback can block SDK observations and undercount time; see the [acceptance results](research/ticket-52-acceptance.md). This is source-preview evidence, not complete billing or clean-machine certification.
 
 Install:
 
