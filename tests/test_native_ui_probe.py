@@ -121,6 +121,27 @@ def test_dispatch_probe_is_bounded_and_does_not_claim_periodic_scheduling(tmp_pa
     assert result["periodic_scheduler_verified"] is False
 
 
+def test_dispatch_stays_bounded_when_host_drops_custom_event_fields(tmp_path):
+    class PayloadDroppingHost(Host):
+        def QueueEvent(self, window, name, event):
+            self.events.append((window, name, {}))
+
+        def RunLoop(self):
+            self.loop_runs += 1
+            self.windows[WINDOW_ID].On["Dispatch"].Clicked({})
+            delivered = 0
+            while self.events and delivered < 30:
+                window, name, event = self.events.pop(0)
+                getattr(window.On[WINDOW_ID], name)(event)
+                delivered += 1
+            assert delivered == 10
+            assert not self.events
+
+    host = PayloadDroppingHost()
+    result = run_probe(None, host, host, report_path=tmp_path / "probe.json")
+    assert len(result["dispatch_callbacks"]) == 10
+
+
 def test_resolve_reads_are_explicit_read_only_and_do_not_log_project_names(tmp_path):
     host = Host()
     project = SimpleNamespace(
