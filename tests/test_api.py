@@ -91,10 +91,11 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(1, len(dashboard["sessions"]))
         self.assertEqual(300, dashboard["settings"]["idle_timeout_seconds"])
         current = dashboard["current_project"]
-        self.assertEqual(7200, current["totals"]["tracked_seconds"])
+        self.assertEqual("stale", dashboard["status"]["tracking_status"])
+        self.assertEqual(3600, current["totals"]["tracked_seconds"])
         self.assertEqual(2, current["totals"]["session_count"])
         self.assertEqual(
-            {"editing": 3600, "playback": 3600, "rendering": 0},
+            {"editing": 0, "playback": 3600, "rendering": 0},
             current["activity_totals"],
         )
         self.assertEqual("2026-01-02T10:00:00Z", current["last_activity"])
@@ -160,6 +161,8 @@ class ApiTest(unittest.TestCase):
                 status = client.get("/status").json()
 
         self.assertEqual("stale", status["tracking_status"])
+        self.assertEqual(0, status["active_elapsed_seconds"])
+        self.assertEqual("0:00:00", status["active_elapsed"])
 
     def test_status_reports_whether_time_is_actually_being_tracked(self):
         with tempfile.TemporaryDirectory() as tmp:
