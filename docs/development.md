@@ -74,7 +74,23 @@ pnpm test
 pnpm run build
 ```
 
-Format changed frontend files with `pnpm run format`.
+To format files, use `uv run --python 3.13 ruff format <changed-path>` from the repository root, or `pnpm run format` from `frontend/`. These commands modify files; review their diff before committing.
+
+### Focused Tests
+
+Run the runtime tracking test file from the repository root:
+
+```powershell
+uv run --python 3.13 -m pytest -q tests/test_runtime_tracking.py
+```
+
+Replace the path with the relevant test file. See [pytest test selection](https://docs.pytest.org/en/stable/how-to/usage.html#specifying-which-tests-to-run) for selecting a single test. Run the complete checks above before integration.
+
+## Runtime and Data Safety
+
+Use a separate database with `--db path/to/test.sqlite3` for live development tests, preserving normal tracking history. Close Resolve before replacing Python runtime code, and close the dashboard before switching desktop launch modes.
+
+The database's `.runtime.json` file contains a private lifecycle token. Exclude it and personal tracking databases from commits, shared diagnostics, and issue attachments. Follow the [privacy rules](../CONTRIBUTING.md#development-notes) when adding probes or diagnostics.
 
 ## Run Individual Layers
 
@@ -93,8 +109,6 @@ cd frontend
 pnpm run build
 pnpm run desktop:smoke
 ```
-
-Use `--db path/to/test.sqlite3` when development should not touch normal tracking history.
 
 Run the five-minute synthetic benchmark with `uv run --python 3.13 scripts/benchmark_runtime.py --output benchmark-runtime.json`. It measures the real runtime with synthetic Active Work, not Resolve scripting performance. The temporary database and simulated Resolve process are discarded. CPU and memory are reported, not CI thresholds.
 

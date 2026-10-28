@@ -6,17 +6,13 @@ Resolve Time Tracker is early, so small focused changes are preferred.
 
 Follow the [Development Guide](docs/development.md) for local setup and the Resolve development-menu workflow. If you are preparing the repository with an AI coding agent, use the [Agentic Development Prompt](docs/agentic-development-prompt.md).
 
-```sh
-uv sync
-```
-
 ## Test
 
-```sh
-uv run ruff format .
-uv run ruff check .
-uv run -m unittest discover -s tests
-```
+Run the Python and frontend checks in the [Development Guide](docs/development.md#run-checks). It also covers focused tests and formatting; verification commands check formatting without changing files.
+
+## Git and Releases
+
+Use [development for integration and main for reviewed release source](docs/branch-workflow.md). Follow the [release policy](docs/releasing.md) for compatibility, version selection, and release preparation.
 
 ## Development Notes
 
