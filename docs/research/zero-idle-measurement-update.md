@@ -158,6 +158,48 @@ files, and focused ty checking passed on the bridge. Checking the existing test
 file with ty still reports seven pre-existing Optional-narrowing diagnostics in
 unrelated runtime tests; this change does not adopt ty as a project-wide gate.
 
+### Cached headless live result
+
+The post-fix headless run (`resolve-live-cached-headless-300.json`) used the real
+Resolve SDK and temporary tracker storage for 301.26 seconds. It completed 60
+observations and 543 SDK calls without a failure or an in-flight call at finish.
+`scriptapp` ran once; total SDK time was 0.7958 seconds. Aggregate sampled tracker
+CPU was 0.588% of one core and peak resident memory was 79.54 MB, passing the
+headless 1% / 150 MB budgets. Startup was 1.076 seconds. Three application
+processes and zero renderers were observed, with zero remaining after exit.
+
+This is a live SDK measurement while the synthetic test project was idle. It
+does not establish representative editing or render performance, and it is not
+a directly comparable replacement for the earlier dashboard-open workload.
+
+### Cached Electron comparison and playback blocking
+
+The post-fix dashboard-open run (`resolve-live-cached-electron-300.json`) lasted
+303.53 seconds with the actual Electron dashboard and temporary storage. It
+included the same disposable solid-color timeline, idle phases, looping playback
+and playback stop. These phases were operated manually; their exact durations
+were not instrumented, so the pre/post comparison is not a controlled benchmark.
+
+| Measured post-fix dashboard workload | Result |
+| --- | ---: |
+| Actual SDK calls / observations / failures | 390 / 43 / 0 |
+| `scriptapp` calls / measured time | 1 / 0.01685 seconds |
+| Total measured SDK time | 89.468 seconds |
+| `GetProjectManager` / `GetCurrentPage` measured time | 43.477 / 45.618 seconds |
+| Aggregate application CPU, one core | 3.711% |
+| Peak sampled aggregate resident memory | 478.79 MB |
+| Application processes / renderers / remaining after exit | 7 / 1 / 0 |
+| Startup | 1.672 seconds |
+| Heartbeat statements / maximum in 60 seconds | 20 / 6 |
+
+The cache eliminates repeated connection acquisition, but does not solve SDK
+getter blocking during playback. No call reported a failure or remained in flight
+at finish; that does not make the 89 seconds of SDK waiting acceptable or prove
+five-second observations throughout playback. This run again fails the aggregate
+1% / 150 MB budgets with Electron open. The observed resource reduction cannot
+be attributed solely to connection caching because the manually operated phases
+and system load differed. Keep dashboard-open cost distinct from headless cost.
+
 Native macOS/X11 behavior, sustained representative media workloads, render
 billing, crash recovery and installed upgrade remain separate acceptance checks.
 Earlier synthetic results above must not be relabeled as live evidence.

@@ -8,8 +8,8 @@ it does not declare all open tickets complete.
 
 | Ticket | Delivered in this branch | Remaining gate |
 | --- | --- | --- |
-| #52 | Process-tree/resource accounting, SQL/dashboard and actual SDK-call instrumentation, cached Resolve connection, CLI regression checks and coverage map. Corrected stale always-active Linux documentation. Actual cached headless Resolve measurement completed. | Cached Electron/Resolve comparison underway; installed-upgrade, representative editing/render workload and native platform checks remain. |
-| #57 | Disposable UIManager probe, host-boundary tests, dedicated Scripts-menu worker, live hide/reopen/Stop/exit evidence, ten native callbacks and three bounded no-op periodic ticks. Periodic read-only project/Page/render probe implemented. | Live periodic read-only playback/render trial and native worker resource measurement pending. Prototype evidence does not implement production tracking. |
+| #52 | Actual SDK/Electron and headless resource measurements, connection cache fix, process/SQL counters, regression coverage and isolated real Windows install/upgrade/rollback test. | SDK getters wait during playback; dashboard-open aggregate budgets fail. Representative render/recovery, actual managed-profile upgrade and native platform checks remain. |
+| #57 | Dedicated native menu worker; hide/reopen/Stop, ten callbacks, three idle periodic SDK reads and sampled worker overhead verified. | Launch during playback delayed until stop. Playback/render safety, activity and production tracking integration remain unproven. |
 | #54 | Existing pnpm fix and Mac handoff preserved; no newly reproduced installer defect. | Fresh Mac installation and installed dashboard/menu launch on an available Mac. |
 | #13 | Studio-first support boundary preserved. | Actual Resolve Free environment. Studio checks do not establish Free support. |
 | #20 | Roadmap now accurately preserves source-preview packaging deferral and explicit startup. | Hosting decision and real editing validation before packaging work. |
@@ -20,13 +20,15 @@ were unavailable during this implementation.
 
 ## Verification
 
-- Earlier integrated Python suite: 122 tests passed, plus 16 subtests. Subsequent
-  native worker slices passed 135 tests, one skipped and 16 subtests before the
-  latest integration merge; a refreshed full integration run is underway.
+- Final integrated Python suite: 138 tests passed, 20 subtests passed and one
+  opt-in installed-profile test skipped. The real isolated Windows installer
+  check separately passed in 314.13 seconds; see
+  [its scope and substituted path discovery](isolated-windows-install-validation.md).
 - Full Ruff format and lint checks passed; focused ty evaluations passed for the
   new scripts. Existing Python constraints and quality gates were preserved.
-- Existing frontend: 27 tests passed; lint and production build passed. The
-  build retains its pre-existing large-bundle warning; frontend code is unchanged.
+- Frontend: 29 tests passed for the live-mode slice. The Electron benchmark hook
+  uses a temporary profile and normal timed quit; the dashboard UI is unchanged.
+  Earlier lint/build passed, retaining the existing large-bundle warning.
 - Five-minute synthetic dashboard-HTTP benchmark: 0.681% of one CPU core,
   75.92 MB peak sampled aggregate memory, three observed application processes,
   and zero previously observed application processes after exit. No real Resolve
@@ -49,8 +51,18 @@ were unavailable during this implementation.
   Sampled application tree used 0.588% of one CPU core, peaked at 79.54 MB and
   three processes, observed zero renderers and zero remaining processes after
   exit; startup was 1.076 seconds. Cached Electron comparison is underway.
-- Pending final results: cached Electron comparison, native periodic read-only
-  playback/render trial, native worker resources and refreshed integrated checks.
+- Native idle periodic reads passed on Deliver and Edit pages and returned
+  cleanly. A menu launch during looping playback delayed window/report creation
+  until playback stopped. A subsequent 21-second sampled worker interval used
+  0.446% of one core and 28.27 MB peak memory with clean identity-aware exit;
+  startup and the playback delay were excluded. See the native evidence for
+  limits. Production native tracking and render responsiveness remain unproven.
+- Cached Electron comparison: 303.53 seconds, 43 observations, 390 SDK calls,
+  zero failures and one connection. Total SDK time was 89.468 seconds, dominated
+  by GetProjectManager/GetCurrentPage waits during the playback experiment.
+  Aggregate tracker/dashboard cost was 3.711% of one core and 478.79 MB peak,
+  with seven processes/one renderer and zero remaining after exit. Dashboard-open
+  budgets failed. Manual phase timing prevents a controlled pre/post comparison.
 
 Detailed evidence: [measurement update](zero-idle-measurement-update.md) and
 [native prototype](native-ui-prototype.md). Temporary tracker data was used;
@@ -67,14 +79,15 @@ Earlier parallel review found no confirmed defect in the delivered code slices
 and no scope creep. Later review identified stale documentation conclusions;
 this update distinguishes the successful menu-worker feasibility evidence from
 the historical console failures. #52 still needs its Electron comparison and
-workload/platform/upgrade evidence. #57 still needs read-only workload and
-resource evidence. Both tickets remain open.
+workload/platform/managed-upgrade evidence. #57 still needs playback/render-safe
+operation and production integration. Both tickets remain open. Final parallel
+review found zero code findings; its two stale-documentation findings were fixed.
 
 ## Next frontier
 
-Finish the bounded native worker's read-only trial during playback/rendering and
-sample its CPU/memory, then record the minimum viable hosting decision. Complete
-the cached real Resolve/Electron comparison. Keep production billing in the
-existing runtime while the native probe remains a feasibility experiment. Carry
+Isolate delayed menu bootstrap and SDK waits during playback before connecting
+the native UI to shared tracking/storage. Keep production billing in the
+existing runtime and Electron on demand while the native route remains a
+feasibility experiment. Carry
 Mac/Free validation forward without inventing results or replacing the user's
 Studio installation.

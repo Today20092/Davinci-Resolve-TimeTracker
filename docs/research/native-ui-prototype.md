@@ -266,6 +266,38 @@ execution will behave the same as the console, or force tracker work into the
 host process to reduce process count. Production tracking integration is outside
 this disposable probe's scope.
 
+## Read-only menu trial and playback limitation
+
+On Windows 11 with Resolve Studio 21.1.1.10, the dedicated menu worker used
+Python 3.13.14. The idle Deliver-page trial (`resolve-native-probe-u_3ldeua`)
+delivered all ten callbacks and read the disposable project's Page/render state
+at 5.002, 10.011 and 15.017 seconds. Reads took 1.9–6.3 ms, reported a project
+open and rendering false, and the worker returned and exited. This establishes
+bounded read-only scheduling while idle, not billable tracking.
+
+A subsequent menu launch during looping playback created `fuscript.exe` PID
+21312 under Resolve PID 19992, but produced no new report or visible probe
+window during playback. After playback stopped, the same worker displayed its
+window and wrote `resolve-native-probe-bj5h1y6f`. It then completed three Edit-page
+reads in 2.2–3.3 ms and returned. The exact pre-report blocking call is unknown;
+this is evidence of delayed launch during playback, not proof that StepLoop or a
+particular getter blocked. Resolve's timecode continued advancing during the
+delay. Do not claim successful native operation during playback or rendering.
+
+After playback stopped, 24 OS process-tree samples over 21.00 seconds measured
+0.446% of one core, 28.27 MB peak resident memory, one worker process and zero
+remaining worker identities. This interval excludes startup and the earlier
+playback delay. The PID was later reused by an unrelated process; creation
+identity, rather than a bare PID existence check, establishes worker exit.
+
+Recommendation: retain the existing tracking runtime and on-demand Electron
+reporting. The bounded native worker is a viable idle utility experiment, but
+its playback launch limitation prevents approving it as the production tracking
+interface. Next isolate menu bootstrap from UI/SDK initialization, test launch
+before playback and reads during playback/rendering, and retain the existing
+worker if host calls cannot be made responsive. Production pause/resume,
+activity classification, history/CSV and host-exit recovery are still pending.
+
 ## Automated checks
 
 ```text
