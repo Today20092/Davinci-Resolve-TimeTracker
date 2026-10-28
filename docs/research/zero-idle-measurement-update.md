@@ -73,7 +73,7 @@ Checks on the final code:
 
 OS sampling can miss processes that start and exit between snapshots, and final CPU consumed after a process's last sample. Resource results are sampled lower bounds, not exact execution tracing. The monitor has its own CPU cost and can perturb a workload even though its cost is excluded. Resident memory is a sampled peak, not unique/proportional memory. Percentages over very short runs are dominated by startup and are not release thresholds.
 
-This does not measure a real Resolve SDK workload, actual Electron rendering, a managed-install upgrade, macOS/X11 permission/tool behavior, or real editing/playback/render/crash recovery. A renderer count of zero in this synthetic HTTP-only scenario is not evidence that a real dashboard uses no renderer. Full application-tree measurement with the actual dashboard remains a live validation task. Keep #52 open for those checks.
+The synthetic scenario does not measure a real Resolve SDK workload, actual Electron rendering, a managed-install upgrade, macOS/X11 permission/tool behavior, or real editing/playback/render/crash recovery. A renderer count of zero in this synthetic HTTP-only scenario is not evidence that a real dashboard uses no renderer. The live continuation below records the separate application-tree measurement. Keep #52 open for outstanding acceptance checks.
 
 ## Live Resolve and Electron continuation
 
@@ -115,10 +115,52 @@ processes with zero remaining after exit. Peak sampled aggregate memory was
 79.21 MB. Its 6.276% one-core CPU result is dominated by startup and a short
 measurement interval; it is not a five-minute performance certification.
 
-The actual Electron workload, sustained editing/playback/rendering, native
-macOS/X11 behavior and installed upgrade remain separate live acceptance checks
-until their results are recorded. Earlier synthetic results above must not be
-relabeled as live evidence.
+### Five-minute live dashboard baseline and connection fix
+
+The Windows live run in `resolve-live-electron-300.json` used the actual Electron
+dashboard and Resolve Studio 21.1.1.10 with a disposable five-second solid-color
+timeline. The operator observed looping playback at 30 fps and an advancing
+timecode, with playback-stop and unfocused phases. A short H.264 render was
+started near the end, but its overlap with measurement is not established; this
+run does not validate render billing.
+
+| Measured baseline | Result |
+| --- | ---: |
+| Duration | 303.87 seconds |
+| Actual SDK calls / observations | 482 / 48 |
+| Failed SDK calls / in-flight at finish | 0 / 0 |
+| Total measured SDK time | 65.990 seconds |
+| `scriptapp` calls / measured time | 48 / 65.574 seconds |
+| Aggregate application CPU, one core | 5.963% |
+| Peak sampled aggregate resident memory | 458.48 MB |
+| Application processes / renderers | 7 / 1 |
+| Heartbeat statements / maximum in 60 seconds | 17 / 6 |
+| Previously observed application processes after exit | 0 |
+
+Both the 1% CPU and 150 MB aggregate memory budgets **failed** in this real
+dashboard workload. The aggregate includes the actual dashboard, its children
+and the temporary runtime; it excludes Resolve and the sampler. It cannot be
+compared directly with the headless synthetic result as a dashboard-free budget.
+
+The SDK proxy identified repeated connection acquisition as the latency source:
+`scriptapp("Resolve")` took over 99% of measured SDK time. Other snapshot getters
+together took about 0.416 seconds. The shared bridge now retains a successfully
+acquired Resolve object for its tracked-process session. A failed mandatory SDK
+snapshot read discards that automatic cache so the next observation can
+reconnect. Host-injected Resolve objects are retained, and optional metadata
+reads keep their existing tolerant behavior. The serialized observation cadence
+is unchanged. Tests prove connection reuse and recovery at the public snapshot
+and SDK boundary; improved live latency/CPU still requires a fresh run.
+
+After this fix, the integrated Python suite passed 135 tests and 20 subtests,
+with one installed-profile test skipped. Ruff passed on the changed Python
+files, and focused ty checking passed on the bridge. Checking the existing test
+file with ty still reports seven pre-existing Optional-narrowing diagnostics in
+unrelated runtime tests; this change does not adopt ty as a project-wide gate.
+
+Native macOS/X11 behavior, sustained representative media workloads, render
+billing, crash recovery and installed upgrade remain separate acceptance checks.
+Earlier synthetic results above must not be relabeled as live evidence.
 
 ### Live-mode automated checks
 
