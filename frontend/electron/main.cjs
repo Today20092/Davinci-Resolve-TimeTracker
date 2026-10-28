@@ -19,8 +19,6 @@ const appName = "Resolve Time Tracker"
 app.setName(appName)
 app.setAppUserModelId("com.resolve-time-tracker.app")
 const devMode = process.argv.includes("--dev")
-const single = app.requestSingleInstanceLock()
-if (!single) app.quit()
 let win = null
 let connection = null
 let child = null
@@ -28,6 +26,7 @@ let quitting = false
 let released = false
 let sidecarStderr = ""
 let lastSidecarError = null
+let benchmarkTimer = null
 
 function readArg(name) {
   const index = process.argv.indexOf(name)
@@ -46,6 +45,14 @@ function defaultDb() {
 const db = path.resolve(
   readArg("--db") || process.env.RESOLVE_TIME_TRACKER_DB || defaultDb()
 )
+const benchmarkSecondsArg = readArg("--benchmark-seconds")
+if (benchmarkSecondsArg !== null && readArg("--db")) {
+  const profile = path.join(path.dirname(db), "benchmark-electron-profile")
+  fs.mkdirSync(profile, { recursive: true })
+  app.setPath("userData", profile)
+}
+const single = app.requestSingleInstanceLock()
+if (!single) app.quit()
 
 ipcMain.handle("open-data-folder", (_event, dbPath) => {
   if (typeof dbPath !== "string" || !dbPath) return false
@@ -172,6 +179,9 @@ function createWindow() {
   win.on("closed", () => {
     win = null
   })
+  if (benchmarkSecondsArg !== null) {
+    benchmarkTimer = setTimeout(() => app.quit(), Number(benchmarkSecondsArg) * 1000)
+  }
   if (process.argv.includes("--smoke-test")) {
     const timer = setTimeout(() => {
       process.exitCode = 1
@@ -208,6 +218,11 @@ app.on("second-instance", () => {
 app.whenReady().then(async () => {
   if (!single) return
   try {
+    if (benchmarkSecondsArg !== null &&
+        (!readArg("--db") || !Number.isFinite(Number(benchmarkSecondsArg)) || Number(benchmarkSecondsArg) <= 0 ||
+         Number(benchmarkSecondsArg) * 1000 > 2147483647)) {
+      throw new Error("--benchmark-seconds requires an explicit --db and a positive finite timer duration.")
+    }
     connection = await connectRuntime({ db, pid: process.pid, startSidecar })
     if (quitting) {
       await connection.release()
@@ -221,6 +236,7 @@ app.whenReady().then(async () => {
 })
 app.on("window-all-closed", () => app.quit())
 app.on("before-quit", (event) => {
+  clearTimeout(benchmarkTimer)
   quitting = true
   if (released) return
   event.preventDefault()

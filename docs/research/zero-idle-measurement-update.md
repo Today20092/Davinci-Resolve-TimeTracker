@@ -75,7 +75,64 @@ OS sampling can miss processes that start and exit between snapshots, and final 
 
 This does not measure a real Resolve SDK workload, actual Electron rendering, a managed-install upgrade, macOS/X11 permission/tool behavior, or real editing/playback/render/crash recovery. A renderer count of zero in this synthetic HTTP-only scenario is not evidence that a real dashboard uses no renderer. Full application-tree measurement with the actual dashboard remains a live validation task. Keep #52 open for those checks.
 
-## API references
+## Live Resolve and Electron continuation
+
+The benchmark now supports an explicit live attachment. It validates that the
+given PID belongs to a running Resolve executable, starts one measured runtime
+against a fresh temporary database, and counts SDK method calls through a
+benchmark-only proxy around the real Resolve bridge. Per-method totals, failures,
+elapsed call time and unresolved in-flight calls are reported without storing
+arguments, return values, project names or media paths. Snapshot observations
+remain a separate counter. The proxy measures method boundaries, not individual
+transport messages or Resolve's internal work.
+
+```text
+uv run --python 3.13 scripts/benchmark_runtime.py --seconds 300 --live-resolve-pid <PID> --output benchmark-live.json
+uv run --python 3.13 scripts/benchmark_runtime.py --seconds 300 --live-resolve-pid <PID> --electron --frontend <built-frontend-directory> --output benchmark-live-dashboard.json
+```
+
+Start Resolve separately and use a disposable project. The benchmark does not
+launch, close or terminate the attached Resolve process. At the end it signals
+only its own temporary runtime to stop tracking. The internal worker rejects
+pre-existing databases and paths outside its fresh temporary benchmark directory.
+Production history and existing installations are not selected.
+
+`--electron` requires the installed Electron executable and prebuilt frontend
+assets under the chosen frontend directory. It launches the actual dashboard
+against the same temporary database, with a separate temporary Electron profile.
+The opt-in `--benchmark-seconds` desktop argument uses normal `app.quit()` and
+runtime detachment after the measurement interval. It requires an explicit
+database and validates the timer range; ordinary desktop launches are unchanged.
+The OS process census aggregates both runtime and dashboard roots and descendants,
+excluding actual Resolve and the benchmark monitor. A dashboard that exits early
+fails the run rather than being counted as a completed renderer workload.
+
+The parent performed a 15-second live SDK-only attach on Windows, Resolve Studio
+21.1.1.10, using the saved disposable project. The runtime lasted 17.06 seconds,
+made 42 SDK method calls over four observations, reported zero failed/in-flight
+SDK calls, counted eight data-write statements, and observed three application
+processes with zero remaining after exit. Peak sampled aggregate memory was
+79.21 MB. Its 6.276% one-core CPU result is dominated by startup and a short
+measurement interval; it is not a five-minute performance certification.
+
+The actual Electron workload, sustained editing/playback/rendering, native
+macOS/X11 behavior and installed upgrade remain separate live acceptance checks
+until their results are recorded. Earlier synthetic results above must not be
+relabeled as live evidence.
+
+### Live-mode automated checks
+
+The SDK-boundary test checks nested calls, failures, elapsed time and omission of
+private values. A real worker/process test proves stopping the benchmark leaves
+the attached process alive. CLI checks reject a non-Resolve PID, missing Electron
+assets and existing-history worker paths before work starts. Desktop lifecycle
+checks verify timed quit uses normal detach and temporary profile selection.
+
+Before integration with the concurrent native-menu slice, the full Python suite
+passed 127 tests and 16 subtests; all 29 frontend tests, Ruff and focused ty checks
+passed. These tests do not substitute for live Electron or editing evidence.
+
+### API references
 
 - [Python subprocess](https://docs.python.org/3.13/library/subprocess.html), including bounded child commands and Windows console flags. Current docs also fetched through Context7 `/python/cpython/v3.13.9`.
 - [Microsoft Win32_Process](https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-process), for parent PID, start identity, command line, CPU times and resident bytes.
