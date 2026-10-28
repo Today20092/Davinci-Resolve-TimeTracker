@@ -19,7 +19,11 @@ Activity detection:
 
 ## macOS
 
-Status: supported in code, needs real-machine smoke testing.
+Status: fresh installation, installed dashboard, and repeated Resolve menu launch
+verified on Apple Silicon macOS 27.0.1 with Resolve Studio 21.1.1.10; see the
+[installation results](research/ticket-54-macos-acceptance.md). Broader runtime
+acceptance remains partial; see the [Mac runtime results](research/ticket-58-macos-acceptance.md),
+including the blocked SDK child limit after a parent crash.
 
 Install:
 

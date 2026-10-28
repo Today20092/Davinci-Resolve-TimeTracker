@@ -11,7 +11,7 @@ Broader activity, workload and ownership acceptance belongs to #58.
 | --- | --- |
 | macOS | 27.0.1, build 26A434 |
 | Architecture | arm64 / Apple Silicon |
-| Resolve application | 21.1.1, bundle build 21.1.10010; running edition confirmation pending |
+| Resolve application | DaVinci Resolve Studio 21.1.1.10, confirmed by the running scripting API; bundle build 21.1.10010 |
 | Git | 2.54.0 (Apple Git-157) |
 | Node.js | Interactive shell: 22.23.1; observed installer Electron-download child: Homebrew 26.10.0 |
 | pnpm used for installation | 11.21.0, matching `frontend/package.json` |
@@ -45,8 +45,18 @@ Broader activity, workload and ownership acceptance belongs to #58.
 | Frontend checks in fresh clone | PASS: lint, typecheck, 29 tests (0 skipped), production build |
 | Missing pnpm prerequisite | PASS: restricted `PATH` produced `Install failed: Node.js with pnpm is required to build the desktop app.` before build/menu mutation |
 | Resolve SDK default files | PASS: default macOS `DaVinciResolveScript.py` and application `fusionscript.so` exist |
-| Installed dashboard | Pending live validation |
-| Resolve menu attach / repeat launch | Pending live validation |
+| Installed dashboard | PASS: installed Python launcher with `--companion --db <test-db>` opened the built Electron dashboard; it showed the disposable project and connected runtime |
+| Resolve menu attach / repeat launch | PASS: invoked the unmodified `Workspace > Scripts > ResolveTimeTrackerMenu` twice through Resolve; both used runtime PID 46085 and SDK reader PID 46102 |
+
+The default database did not exist before testing. To exercise the unmodified
+generated menu without creating ordinary tracking history, its default database
+path was temporarily symlinked to a separate disposable database. The managed
+runtime resolved that path, placing runtime metadata beside the test database.
+Only a newly created acceptance project and generated test-pattern media were
+used. Tracking alone did not open Electron; the dashboard opened on demand.
+The installed paths point to the fresh acceptance clone, not the working
+checkout or Vite development mode. The live API confirmed scripting access and
+the installed Python 3.13.14 runtime.
 
 The missing-prerequisite check ran the fresh installer's Python entry point with
 `PATH=/usr/bin:/bin` and an explicit existing source directory. It returned exit

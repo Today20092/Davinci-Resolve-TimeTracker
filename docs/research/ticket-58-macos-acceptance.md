@@ -48,24 +48,64 @@ platform tests on a Mac do not establish native X11 behavior.
 
 ## Remaining live acceptance
 
-- Reuse #54's fresh installation and installed launch result, recording the
-  actual Resolve Studio version and source/runtime identities.
 - With a disposable project and separate database, verify native foreground and
   idle transitions through the installed tracker, including resumed activity.
+  Automation operated Resolve while the native probe still identified Electron
+  or ChatGPT as foreground; this does not prove foreground editing billing.
 - Exercise an actual denied privacy permission only through a user-controlled
   OS permission decision; no permission was changed for the probes above.
 - Verify no platform commands are sampled while the real Resolve process is
   absent, including after Resolve exits.
-- Verify repeated tracked launch reuses one runtime, dashboard launch is on
-  demand, reports survive Resolve exit, and closing all owners releases runtime
-  and SDK child.
-- Measure real editing, playback, and rendering workloads and record any SDK
-  freshness or billing limits.
-- Run all documented Python/frontend checks on the combined changes.
 - Run the required native X11 Linux checks on a real X11 host with Studio.
+  The owner explicitly limited this session to Mac and asked to leave X11 open.
 
 Use `scripts/ResolveTimeTracker.py --tracked-launch --db <test-directory>/tracker.sqlite3`
 and `--companion --db <same-test-database>` for explicit data isolation. The
 generated Resolve menu currently uses the default database, so its isolation
 must be arranged before invoking it. Do not attach `.runtime.json` contents:
 they contain a private lifecycle token.
+
+## Installed Mac run
+
+Reused the fresh exact-revision installation documented in
+[the #54 results](ticket-54-macos-acceptance.md). The running API confirmed
+DaVinci Resolve Studio 21.1.1.10. Resolve PID 45052, runtime PID 46085,
+multiprocessing resource-tracker PID 46101, and SDK reader PID 46102 were
+observed. The source and Python runtime were in the fresh acceptance clone.
+The default database path was temporarily symlinked to a disposable database;
+`run_managed` resolved it before opening SQLite and runtime metadata. No earlier
+default database existed. The symlink was removed after all owners exited.
+
+| Check | Result and boundary |
+| --- | --- |
+| Installed launch and repeated menu invocation | Pass: unmodified Resolve menu invoked twice; runtime and SDK reader PIDs were unchanged. No Electron dashboard started until explicitly requested. |
+| Built dashboard | Pass: installed `--companion --db <test-db>` opened the built dashboard and connected to the same runtime; Vite was not used. |
+| Background pause | Observed: native samples identified a non-Resolve foreground app and status remained paused/idle. True Resolve-foreground, inactivity-threshold, and resume transitions remain unverified. |
+| Synthetic editing | Imported generated 1280x720, 24 fps ProRes media, created timelines, and appended nine clips to a disposable timeline. These scripting operations do not establish active-work billing under human editing. |
+| Playback | Native Playback > Play Forward advanced the long timeline from `00:00:00:00` to `00:02:10:05` before native Stop. Across 50 diagnostic samples around playback, maximum API response was 0.014 seconds; SDK reader was pending in 14 samples. This confirms responsive reporting, not fresh SDK observations or foreground playback billing. |
+| Rendering | Two 20-second-source UHD ProRes renders completed in 2158 and 1834 ms. A 200-second-source render completed in 10712 ms; status sampling observed rendering from sample time 3.56 to 13.17 seconds. Seventy API samples had maximum response 0.012 seconds. Final dashboard showed two rendering rows of 5 and 10 seconds, 15 seconds total. This synthetic run does not certify all workloads or exact billing accuracy. |
+| Resource spot check | Runtime 0.0–0.1% CPU, RSS 80432 KiB; resource tracker 0.0%, 19984 KiB; SDK reader 0.0%, 33504 KiB. `ps` snapshots are not peaks or a sustained benchmark. |
+| Resolve exit with dashboard open | Pass: API switched to reporting/resolve_closed, tracking disabled, SDK reader exited; dashboard retained render totals and rows. |
+| Last dashboard owner closes | Pass: runtime, resource tracker, and SDK reader PIDs were all absent and runtime metadata was removed. |
+
+No actual OS permission was revoked or granted during this run. The command
+failure and timeout probes above must not be presented as permission-denial
+acceptance. Real Resolve-absent command sampling was not traced; only controlled
+presence suppression and real SDK-child cleanup were verified.
+
+## Combined validation
+
+- Python formatting and lint passed; complete suite: 152 passed, 4 skipped,
+  32 subtests passed. The skips are platform-specific and do not establish native
+  Linux acceptance.
+- A Mac-specific privacy-test false positive was fixed at the existing saved
+  probe-report interface: `/private/var` is a legitimate report path. The check
+  now rejects the actual private fixture name and its HTML-escaped form after
+  parsing JSON. Focused file: 15 passed.
+- Frontend lint, typecheck, all 29 tests, and production build passed on the same
+  runtime/frontend source revision. The integration changes only evidence,
+  platform-status documentation, and the Python privacy assertion. The existing
+  500 kB chunk warning remains documented in #54's report.
+
+Issue #58 remains open for the listed native Mac gates and X11 checks. The
+blocked SDK-child parent-crash limit remains an observed risk.
