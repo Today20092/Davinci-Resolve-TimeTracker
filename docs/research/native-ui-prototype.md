@@ -145,6 +145,12 @@ current phase markers do not distinguish a blocked final Hide from object
 cleanup/destruction or other host-console behavior. No repeat invocation or
 stale-window experiment could be completed in that console.
 
+A subsequent normal application-close request eventually ended the second test
+instance; no Resolve process remained at the final cleanup check. The first
+attempt had been terminated after a normal exit request did not complete while
+its probe was active. No existing project was opened or edited. The saved empty
+`TimeTracker Spec Probe 20261027` project remains available for later checks.
+
 The console route is therefore not yet suitable for a production tracking
 controller. Keep #57 open for a safe Scripts-menu or lightweight-worker
 experiment, preserving the working sidecar/dashboard. Do not infer that menu
