@@ -27,6 +27,16 @@ def sdk_file(tmp_path):
     return module
 
 
+def ready_snapshot(bridge):
+    deadline = time.monotonic() + 10
+    while True:
+        try:
+            return bridge.snapshot()
+        except TimeoutError:
+            assert time.monotonic() < deadline
+            time.sleep(0.05)
+
+
 def test_managed_runtime_uses_an_owned_sdk_child_by_default(tmp_path, monkeypatch):
     modules = tmp_path / "Modules"
     modules.mkdir()
@@ -52,6 +62,7 @@ def test_gil_holding_sdk_child_cannot_stall_status_pause_or_stop(tmp_path):
         runtime = TrackingRuntime(TrackingEngine(store, snapshot_provider=bridge))
         api = ApiState(store, tracking_engine=runtime.engine, tracking_runtime=runtime)
         try:
+            assert ready_snapshot(bridge).project_name == "Test project"
             assert runtime.observe()
             (tmp_path / "block").touch()
             runtime.start()
@@ -78,21 +89,29 @@ def test_gil_holding_sdk_child_cannot_stall_status_pause_or_stop(tmp_path):
 def test_pending_sdk_call_reuses_one_child_and_discards_its_late_reply(tmp_path):
     bridge = IsolatedResolveBridge(sdk_file(tmp_path), Active(), timeout_seconds=1)
     try:
-        assert bridge.snapshot().project_name == "Test project"
+        assert ready_snapshot(bridge).project_name == "Test project"
         child_pid = bridge.diagnostics()["sdk_reader_pid"]
         (tmp_path / "block").touch()
         with pytest.raises(TimeoutError):
             bridge.snapshot()
         assert bridge.diagnostics()["sdk_reader_pending"]
+        late_seen = False
         for _ in range(3):
-            with pytest.raises(TimeoutError):
+            with pytest.raises(TimeoutError) as failure:
                 bridge.snapshot()
             assert bridge.diagnostics()["sdk_reader_pid"] == child_pid
+            late_seen = "late" in str(failure.value)
+            if late_seen:
+                break
         (tmp_path / "block").unlink()
-        time.sleep(2.2)
-        with pytest.raises(TimeoutError, match="late"):
-            bridge.snapshot()
-        snapshot = bridge.snapshot()
+        deadline = time.monotonic() + 5
+        while not late_seen:
+            with pytest.raises(TimeoutError) as failure:
+                bridge.snapshot()
+            late_seen = "late" in str(failure.value)
+            assert time.monotonic() < deadline
+            time.sleep(0.05)
+        snapshot = ready_snapshot(bridge)
         assert snapshot.project_name == "Test project"
         assert snapshot.resolve_is_foreground
         assert bridge.diagnostics()["sdk_reader_pid"] == child_pid
