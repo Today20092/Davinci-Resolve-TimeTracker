@@ -260,15 +260,23 @@ class RuntimeTrackingTest(unittest.TestCase):
         self.assertEqual("2026-01-02T14:30:00Z", rows[0]["ended_at_utc"])
 
     def test_mac_activity_probe_parses_idle_and_foreground(self):
-        def run_text(command: list[str]) -> str:
-            if command[0] == "ioreg":
-                return '    "HIDIdleTime" = 2500000000\n'
-            return "DaVinci Resolve\n"
+        for process_name, expected in (
+            ("Resolve", True),
+            ("DaVinci Resolve", True),
+            ("DaVinci Resolve Studio", True),
+            ("Finder", False),
+            ("Resolve Helper", False),
+        ):
+            with self.subTest(process_name=process_name):
 
-        probe = MacActivityProbe(run_text=run_text)
+                def run_text(command: list[str]) -> str:
+                    if command[0] == "ioreg":
+                        return '    "HIDIdleTime" = 2500000000\n'
+                    return process_name + "\n"
 
-        self.assertEqual(2.5, probe.idle_seconds())
-        self.assertTrue(probe.resolve_is_foreground())
+                probe = MacActivityProbe(run_text=run_text)
+                self.assertEqual(2.5, probe.idle_seconds())
+                self.assertEqual(expected, probe.resolve_is_foreground())
 
     def test_linux_activity_probe_parses_idle_and_foreground(self):
         def run_text(command: list[str]) -> str:
