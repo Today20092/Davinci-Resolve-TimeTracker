@@ -142,7 +142,7 @@ class TrackingRuntime:
                 heartbeat is not None
                 and (paused_at - heartbeat).total_seconds() > STALE_HEARTBEAT_SECONDS
             ):
-                self._snapshot = self.engine.poll(
+                self.engine.poll(
                     paused_at,
                     RuntimeSnapshot(None, None, False, None, None),
                 )
