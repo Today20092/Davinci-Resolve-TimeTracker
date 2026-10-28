@@ -8,8 +8,8 @@ it does not declare all open tickets complete.
 
 | Ticket | Delivered in this branch | Remaining gate |
 | --- | --- | --- |
-| #52 | Observed process-tree/resource accounting, truthful counter provenance, SQL/dashboard counters, CLI regression checks and coverage map. Corrected stale always-active Linux documentation. | Actual Electron/Resolve workload measurements, SDK-call instrumentation, installed-upgrade and native platform checks. |
-| #57 | Disposable UIManager probe, capability/phase reports, bounded callbacks, host-boundary tests and Windows console observations. | Scripts-menu route, hide/reopen/controller lifetime, safe periodic scheduling and editing/playback/render validation. |
+| #52 | Process-tree/resource accounting, SQL/dashboard and actual SDK-call instrumentation, cached Resolve connection, CLI regression checks and coverage map. Corrected stale always-active Linux documentation. Actual cached headless Resolve measurement completed. | Cached Electron/Resolve comparison underway; installed-upgrade, representative editing/render workload and native platform checks remain. |
+| #57 | Disposable UIManager probe, host-boundary tests, dedicated Scripts-menu worker, live hide/reopen/Stop/exit evidence, ten native callbacks and three bounded no-op periodic ticks. Periodic read-only project/Page/render probe implemented. | Live periodic read-only playback/render trial and native worker resource measurement pending. Prototype evidence does not implement production tracking. |
 | #54 | Existing pnpm fix and Mac handoff preserved; no newly reproduced installer defect. | Fresh Mac installation and installed dashboard/menu launch on an available Mac. |
 | #13 | Studio-first support boundary preserved. | Actual Resolve Free environment. Studio checks do not establish Free support. |
 | #20 | Roadmap now accurately preserves source-preview packaging deferral and explicit startup. | Hosting decision and real editing validation before packaging work. |
@@ -20,7 +20,9 @@ were unavailable during this implementation.
 
 ## Verification
 
-- Final integrated Python suite: 122 tests passed, plus 16 subtests.
+- Earlier integrated Python suite: 122 tests passed, plus 16 subtests. Subsequent
+  native worker slices passed 135 tests, one skipped and 16 subtests before the
+  latest integration merge; a refreshed full integration run is underway.
 - Full Ruff format and lint checks passed; focused ty evaluations passed for the
   new scripts. Existing Python constraints and quality gates were preserved.
 - Existing frontend: 27 tests passed; lint and production build passed. The
@@ -34,8 +36,21 @@ were unavailable during this implementation.
   one-shot project/Page/render read. Stop exited the event loop and hid the
   window; full console return did not recover during observation. The later
   normal application-close request eventually completed.
-- The initial callback probe remained at 0/10. A payload-independent bounded
-  callback fix passed its regression tests but has not had a fresh live trial.
+- Historical console/custom-event callback attempts remained at 0/10. The later
+  dedicated menu worker delivered 10/10 native Button Clicked callbacks with
+  0.024–0.058 second latency. Hide/reopen reused the original window/report;
+  Stop returned from the full menu invocation and its worker exited.
+- The bounded menu worker recorded no-op ticks at 5.000858, 10.001676 and
+  15.002405 seconds, then returned and exited. Its same-thread exported
+  `StepLoop(wait=False)` route proves bounded no-op scheduling. Periodic SDK
+  read-only workload evidence remains pending; no production tracking is wired.
+- Actual cached headless Resolve run: 301.26 seconds, 60 observations, 543 SDK
+  calls, zero failures, one `scriptapp` call and 0.7958 seconds total SDK time.
+  Sampled application tree used 0.588% of one CPU core, peaked at 79.54 MB and
+  three processes, observed zero renderers and zero remaining processes after
+  exit; startup was 1.076 seconds. Cached Electron comparison is underway.
+- Pending final results: cached Electron comparison, native periodic read-only
+  playback/render trial, native worker resources and refreshed integrated checks.
 
 Detailed evidence: [measurement update](zero-idle-measurement-update.md) and
 [native prototype](native-ui-prototype.md). Temporary tracker data was used;
@@ -48,15 +63,18 @@ The changes retain stdlib/platform boundaries and explicit measurement limits.
 
 ## Spec
 
-Parallel review found no confirmed defect in the delivered code slices and no
-scope creep. It identified two completion gaps: #52 still needs real workload,
-renderer/platform/upgrade evidence, and #57 still needs menu/controller lifetime
-and scheduling evidence. These remain open requirements, not passed checks.
+Earlier parallel review found no confirmed defect in the delivered code slices
+and no scope creep. Later review identified stale documentation conclusions;
+this update distinguishes the successful menu-worker feasibility evidence from
+the historical console failures. #52 still needs its Electron comparison and
+workload/platform/upgrade evidence. #57 still needs read-only workload and
+resource evidence. Both tickets remain open.
 
 ## Next frontier
 
-Test a dedicated, opt-in Scripts-menu or lightweight-worker native-window route
-using the disposable project. Do not connect production billing to the console
-probe until lifecycle and scheduling are reliable. Run real Resolve/Electron
-measurements using the improved instrumentation, and carry Mac/Free validation
-forward without inventing results or replacing the user's Studio installation.
+Finish the bounded native worker's read-only trial during playback/rendering and
+sample its CPU/memory, then record the minimum viable hosting decision. Complete
+the cached real Resolve/Electron comparison. Keep production billing in the
+existing runtime while the native probe remains a feasibility experiment. Carry
+Mac/Free validation forward without inventing results or replacing the user's
+Studio installation.
