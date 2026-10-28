@@ -11,6 +11,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MENU_SCRIPT_NAME = "ResolveTimeTrackerMenu.py"
 DEV_MENU_SCRIPT_NAME = "ResolveTimeTrackerDevMenu.py"
+NATIVE_PROBE_SCRIPT_NAME = "ResolveTimeTrackerNativeProbe.py"
 
 
 def default_utility_dir() -> Path:
@@ -82,15 +83,82 @@ def install_menu_script(
     return target
 
 
+def native_probe_launcher_text(repo_root: Path) -> str:
+    source = repo_root.resolve() / "scripts" / "native_ui_probe.py"
+    return f'''"""Disposable native Resolve Time Tracker probe; generated opt-in entry."""
+import json
+import runpy
+from pathlib import Path
+
+_probe_globals = runpy.run_path(
+    {str(source)!r},
+    init_globals={{"resolve": resolve, "fusion": fusion, "bmd": bmd}},
+    run_name="__main__",
+)
+_probe_result = _probe_globals.get("PROBE_RESULT", {{}})
+if _probe_result.get("report_path"):
+    _report_path = Path(_probe_result["report_path"])
+    _report = json.loads(_report_path.read_text(encoding="utf-8"))
+    _report["menu_invocation_returned"] = True
+    _report_path.write_text(json.dumps(_report, indent=2), encoding="utf-8")
+'''
+
+
+def install_native_probe(
+    *, repo_root: Path = REPO_ROOT, utility_dir: Path | None = None
+) -> Path:
+    utility_dir = default_utility_dir() if utility_dir is None else utility_dir
+    target = utility_dir / NATIVE_PROBE_SCRIPT_NAME
+    text = native_probe_launcher_text(repo_root)
+    if target.exists() and target.read_text(encoding="utf-8") != text:
+        raise FileExistsError(f"Refusing to replace a different script: {target}")
+    utility_dir.mkdir(parents=True, exist_ok=True)
+    target.write_text(text, encoding="utf-8")
+    return target
+
+
+def remove_native_probe(
+    *, repo_root: Path = REPO_ROOT, utility_dir: Path | None = None
+) -> bool:
+    utility_dir = default_utility_dir() if utility_dir is None else utility_dir
+    target = utility_dir / NATIVE_PROBE_SCRIPT_NAME
+    if not target.exists():
+        return False
+    if target.read_text(encoding="utf-8") != native_probe_launcher_text(repo_root):
+        raise ValueError(f"Refusing to remove a different script: {target}")
+    target.unlink()
+    return True
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--utility-dir", type=Path, default=default_utility_dir())
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--native-probe",
+        action="store_true",
+        help="Install only the disposable native probe entry.",
+    )
+    mode.add_argument(
+        "--remove-native-probe",
+        action="store_true",
+        help="Remove only this checkout's generated native probe entry.",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
-    target = install_menu_script(utility_dir=args.utility_dir)
+    if args.remove_native_probe:
+        removed = remove_native_probe(utility_dir=args.utility_dir)
+        print(
+            "Native probe entry removed."
+            if removed
+            else "Native probe entry was not installed."
+        )
+        return 0
+    installer = install_native_probe if args.native_probe else install_menu_script
+    target = installer(utility_dir=args.utility_dir)
     print(target)
     return 0
 

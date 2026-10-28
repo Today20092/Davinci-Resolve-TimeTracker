@@ -65,6 +65,49 @@ temporary entry must execute this script directly with the host globals, not
 spawn the existing companion launcher. Remove only that temporary entry after
 the experiment.
 
+## Dedicated Scripts-menu experiment
+
+The existing menu installer has an opt-in probe mode. From the checkout under
+test, run:
+
+```text
+uv run --python 3.13 scripts/install_resolve_menu.py --native-probe
+```
+
+This creates only `ResolveTimeTrackerNativeProbe.py` in the documented per-user
+Utility folder. It does not replace either production menu entry or start the
+tracker. Restart Resolve after saving existing work, open the disposable project,
+then choose **Workspace > Scripts > ResolveTimeTrackerNativeProbe**. The entry
+executes the probe using the menu's own `resolve`, `fusion` and `bmd` objects;
+it does not create an external scripting connection.
+
+The entry adds `menu_invocation_returned: true` to the probe's temporary report
+only after the entire `runpy` invocation returns. A report ending at
+`after_run_loop` without that marker is not proof of full menu return. A second
+activation that only focuses an existing window creates no report of its own.
+
+To remove this checkout's temporary menu entry after the experiment:
+
+```text
+uv run --python 3.13 scripts/install_resolve_menu.py --remove-native-probe
+```
+
+Both modes accept `--utility-dir` for isolated test locations. Installation and
+removal refuse a file with different contents, and cleanup removes only the
+matching generated probe entry. Remove it before deleting/moving the checkout.
+
+The callback probe now explicitly enables `ProbeEvent` in the window's `Events`
+attribute. The first-party Workflow Integrations README, lines 340–344, states
+that event handlers can be enabled/disabled there and only common events such as
+Clicked/Close are enabled by default. A boundary test models that filtering and
+reproduces zero callback delivery without the declaration. This is a documented
+API configuration correction, not yet proof of real host delivery.
+
+Context7's Fusion Script Docs reference describes `UITimer.Start`, `Stop` and
+`Interval`, but the fetched material does not establish how to create/register
+one in this host or a supported timeout-handler API. The menu experiment does
+not claim a periodic scheduler or guess those calls.
+
 ## Live evidence checklist
 
 - [ ] Record Windows build, Resolve edition/version, repository commit, shipped

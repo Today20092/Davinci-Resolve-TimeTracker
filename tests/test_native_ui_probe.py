@@ -222,3 +222,15 @@ def test_probe_reports_completed_host_phases(tmp_path):
         "before_run_loop",
         "after_run_loop",
     ]
+
+
+def test_custom_probe_events_are_enabled_in_the_native_window(tmp_path):
+    class EventFilteringHost(Host):
+        def QueueEvent(self, window, name, event):
+            if window.props.get("Events", {}).get(name):
+                super().QueueEvent(window, name, event)
+
+    host = EventFilteringHost()
+    host.actions = [lambda window: window.On["Dispatch"].Clicked({})]
+    result = run_probe(None, host, host, report_path=tmp_path / "probe.json")
+    assert len(result["dispatch_callbacks"]) == 10
