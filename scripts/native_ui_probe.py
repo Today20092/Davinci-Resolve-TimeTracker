@@ -105,6 +105,7 @@ def run_probe(resolve, fusion, bmd, *, report_path=None):
                 "ID": WINDOW_ID,
                 "WindowTitle": "Resolve native UI probe",
                 "Geometry": [100, 100, 640, 240],
+                "Events": {"ProbeEvent": True},
             },
             layout,
         ),
@@ -215,4 +216,4 @@ def main(namespace):
 
 
 if __name__ == "__main__":
-    main(globals())
+    PROBE_RESULT = main(globals())
