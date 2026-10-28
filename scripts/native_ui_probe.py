@@ -50,6 +50,7 @@ def run_probe(resolve, fusion, bmd, *, report_path=None):
         "hidden_count": 0,
         "stopped": False,
         "dispatch_callbacks": [],
+        "dispatch_queued": 0,
         "phases": [],
     }
     report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
@@ -114,23 +115,41 @@ def run_probe(resolve, fusion, bmd, *, report_path=None):
         report["hidden_count"] += 1
         report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
 
+    dispatch_active = False
+    queued_at = 0.0
+
     def stop(event):
+        nonlocal dispatch_active
+        dispatch_active = False
         report["stopped"] = True
         try:
             report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
         finally:
             dispatcher.ExitLoop()
 
-    def dispatch(event):
-        if report["stopped"]:
+    def queue_next():
+        nonlocal queued_at
+        queued_at = time.monotonic()
+        report["dispatch_queued"] += 1
+        report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+        ui.QueueEvent(window, "ProbeEvent", {})
+
+    def start_dispatch(event):
+        nonlocal dispatch_active
+        if dispatch_active or report["stopped"]:
             return
-        queued_at = event.get("queued_at")
-        if queued_at is None:
-            report["dispatch_callbacks"] = []
-        else:
-            report["dispatch_callbacks"].append(
-                {"latency_seconds": time.monotonic() - queued_at}
-            )
+        dispatch_active = True
+        report["dispatch_callbacks"] = []
+        report["dispatch_queued"] = 0
+        queue_next()
+
+    def dispatch(event):
+        nonlocal dispatch_active
+        if not dispatch_active or report["stopped"]:
+            return
+        report["dispatch_callbacks"].append(
+            {"latency_seconds": time.monotonic() - queued_at}
+        )
         count = len(report["dispatch_callbacks"])
         window.Find(
             "Status"
@@ -139,7 +158,9 @@ def run_probe(resolve, fusion, bmd, *, report_path=None):
         )
         report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
         if count < 10:
-            ui.QueueEvent(window, "ProbeEvent", {"queued_at": time.monotonic()})
+            queue_next()
+        else:
+            dispatch_active = False
 
     def read_resolve(event):
         started_at = time.monotonic()
@@ -172,7 +193,7 @@ def run_probe(resolve, fusion, bmd, *, report_path=None):
         window.On[WINDOW_ID].Close = hide
         window.On["Hide"].Clicked = hide
         window.On["Stop"].Clicked = stop
-        window.On["Dispatch"].Clicked = dispatch
+        window.On["Dispatch"].Clicked = start_dispatch
         window.On["Read"].Clicked = read_resolve
         window.On[WINDOW_ID].ProbeEvent = dispatch
 

@@ -103,11 +103,13 @@ console context. It does not establish the Scripts-menu interpreter or justify
 changing the project's supported Python versions. The separate bundled Python
 3.14 executable is a different runtime.
 
-No native probe window was observed after approximately thirty seconds. The
-initial report was written before dispatcher construction, so it could not
-distinguish a dispatcher, layout, window or event-loop problem. No callback or
-read result was recorded. Resolve remained responsive to the parent's UI checks;
-this is not a successful native UI/lifetime result.
+The initial top-level window inventory did not list a native probe window. That
+inventory was insufficient: the later attempt established that this UIManager
+window is a child of Resolve's main window. The first result is therefore
+inconclusive, not proof that dispatcher creation failed. The initial report was
+written before dispatcher construction and recorded no callback or read result.
+Normal shutdown did not end the first attempt; the parent subsequently terminated
+the disposable Resolve process. This does not establish clean host shutdown.
 
 The probe now writes before/after phase markers around dispatcher creation,
 layout construction, AddWindow, handler setup, Show and RunLoop. Each write is
@@ -116,10 +118,39 @@ without private error text and is re-raised. A hanging call leaves the last
 `before_*` marker available for inspection. The parent controls stopping the old
 attempt and any retry; no retry should run alongside a possibly active dispatcher.
 
-The layout call matches the shipped sample's `AddWindow(properties,
-ui.VGroup([children]))` shape. Its validity in this actual console still requires
-live confirmation; accepting that shape in a fake test is not evidence of SDK
-compatibility.
+On the instrumented retry the parent found a visible native child window owned by
+Resolve, PID 34384, with Python 3.13.14 and a report at `before_run_loop`. That is
+the expected phase while the event loop is active. The layout call matches the
+shipped sample's `AddWindow(properties, ui.VGroup([children]))` shape and the retry
+now establishes visible console-context window creation. Menu launch, independent
+controller lifetime, periodic scheduling and real tracking remain unverified.
+
+Clicking the initial Dispatch implementation left the displayed result at 0/10.
+The cause is not yet established. Its old implementation interpreted a missing
+custom event timestamp as another initial button press; a host that drops custom
+payload fields could therefore requeue indefinitely. A regression test reproduced
+that case. Start-button handling and queued callbacks are now separate, with the
+timestamp and bounded counter retained in Python state instead of trusting event
+payloads. JSON records enqueued and delivered counts separately. The fake-host
+regression is not proof of actual custom-event delivery, and a live retry of the
+bounded-callback fix has not been completed.
+
+The parent also observed the original probe's explicit read succeeding while
+idle: a project was open, Page was `cut`, rendering was false and the getter
+sequence took approximately 0.00269 seconds. Stop recorded `stopped: true` and
+`after_run_loop`, and the child window hid. However, the console input remained
+disabled and did not accept a subsequent command minutes later. This establishes
+event-loop exit, not successful return from the full console invocation. The
+current phase markers do not distinguish a blocked final Hide from object
+cleanup/destruction or other host-console behavior. No repeat invocation or
+stale-window experiment could be completed in that console.
+
+The console route is therefore not yet suitable for a production tracking
+controller. Keep #57 open for a safe Scripts-menu or lightweight-worker
+experiment, preserving the working sidecar/dashboard. Do not infer that menu
+execution will behave the same as the console, or force tracker work into the
+host process to reduce process count. The bounded callback correction is tested
+against the SDK boundary only and still needs a fresh live host trial.
 
 ## Automated checks
 
