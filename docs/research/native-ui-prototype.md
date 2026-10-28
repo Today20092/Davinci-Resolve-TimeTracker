@@ -129,15 +129,36 @@ once that stage started, UI creation was fast. It does not distinguish host
 script startup from standard-library imports or temporary-file creation, nor
 prove that every later SDK read is safe during playback. The earlier uninstrumented
 delay therefore must not be attributed specifically to `fusion.UIManager`,
-`FindWindow`, or the dispatcher. The bounded worker's final read/exit results
-remain a separate check.
+`FindWindow`, or the dispatcher. After playback stopped, this worker completed
+three idle read checks and ten callbacks, returned from the full menu invocation
+and exited. That cleanup does not turn the delayed launch into a playback pass.
 
-Minimum recommendation: keep the existing tracking runtime and on-demand
-reporting. Do not expand the native utility into the production entry point on
-the assumption that Python can fix a delay before its instrumented entry. The
-next bounded experiment is to launch while stopped, then begin playback and
-compare event pumping with read-only SDK ticks; this separates menu startup from
-the running worker's responsiveness without changing billing or history.
+#### Launch-before-playback responsiveness trial
+
+The next confirmed overlap used `resolve-native-probe-x0114g8k`, PID 20716.
+The worker launched while idle and completed its first tick at 5.001034 seconds,
+with a 0.001259-second read. The operator then started looping playback while
+the native window remained open and observed advancing playback at 29.97 fps.
+At **2026-10-28 01:34:34.099 UTC**, after clicking the native Stop button,
+the report still showed `stopped: false`, `before_worker_loop`, only that first
+tick, and no `menu_invocation_returned` marker.
+
+After the operator stopped Resolve playback, the native window closed and the
+report changed to `stopped: true`, `after_worker_loop` and
+`menu_invocation_returned: true`. It still contained only one tick: the Stop
+callback ran before a second read. Thus launching before playback did not make
+the event pump or Stop responsive during playback. The evidence does not name
+the exact blocking call inside the loop; further before/after StepLoop markers
+would be needed to distinguish event pumping from other work. A previous
+`resolve-native-probe-3mroxk80` trial finished before playback began and provides
+no evidence of overlap.
+
+Minimum architecture recommendation: retain the existing tracking worker and
+on-demand dashboard. The current native UI route is not safe to approve as the
+production tracking interface: both launch during playback and Stop after a
+pre-playback launch failed responsiveness checks. Do not connect billing/history
+or retire existing entry points based on idle success. Further host event-pump
+isolation would be a separate bounded diagnostic, not a full native UI expansion.
 
 To remove this checkout's temporary menu entry after the experiment:
 
