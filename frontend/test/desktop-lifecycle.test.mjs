@@ -12,14 +12,15 @@ const mainPath = fileURLToPath(new URL("../electron/main.cjs", import.meta.url))
 const source = readFileSync(mainPath, "utf8")
 const flush = () => new Promise((resolve) => setImmediate(resolve))
 
-function desktop({ single = true, connect } = {}) {
+function desktop({ single = true, connect, argv = [], timers } = {}) {
   const windows = []
   const errors = []
+  const profiles = []
   const counts = { connections: 0, releases: 0, quits: 0, starts: 0, pipeClosed: 0 }
   const connection = { apiBase: "http://127.0.0.1:54321", release: async () => { counts.releases++ } }
   const app = new EventEmitter()
   Object.assign(app, {
-    setName() {}, setAppUserModelId() {}, requestSingleInstanceLock: () => single,
+    setName() {}, setAppUserModelId() {}, setPath: (...args) => profiles.push(args), requestSingleInstanceLock: () => single,
     whenReady: () => Promise.resolve(),
     quit() {
       const event = { prevented: false, preventDefault() { this.prevented = true } }
@@ -52,7 +53,7 @@ function desktop({ single = true, connect } = {}) {
   vm.runInNewContext(source, {
     require(name) {
       if (name === "electron") return electron
-      if (name === "node:fs") return { existsSync: () => true }
+      if (name === "node:fs") return { existsSync: () => true, mkdirSync() {} }
       if (name === "node:child_process") return { spawn: () => { counts.starts++; return child } }
       if (name === "./support-report.cjs") return { buildSupportReport: () => "report" }
       if (name === "./sidecar-lifecycle.cjs") return { connectRuntime: async (options) => {
@@ -62,10 +63,12 @@ function desktop({ single = true, connect } = {}) {
       return require(name)
     },
     __dirname: path.dirname(mainPath),
-    process: { argv: ["electron", mainPath], env: {}, platform: process.platform, pid: 42 },
-    console, setTimeout, clearTimeout, AbortSignal,
+    process: { argv: ["electron", mainPath, ...argv], env: {}, platform: process.platform, pid: 42 },
+    console, AbortSignal,
+    setTimeout: timers ? (callback, delay) => { const timer = { callback, delay }; timers.push(timer); return timer } : setTimeout,
+    clearTimeout: timers ? (timer) => { if (timer) timer.cleared = true } : clearTimeout,
   }, { filename: mainPath })
-  return { app, windows, counts, errors, connection }
+  return { app, windows, counts, errors, connection, profiles }
 }
 
 test("requested launch creates one visible renderer; close destroys and detaches", async () => {
@@ -80,6 +83,7 @@ test("requested launch creates one visible renderer; close destroys and detaches
   assert.equal(host.counts.releases, 1)
   assert.equal(host.counts.quits, 1)
   assert.equal(host.counts.starts, 0)
+  assert.deepEqual(host.profiles, [])
 })
 
 test("second instance focuses dashboard without another renderer or owner", async () => {
@@ -120,4 +124,27 @@ test("quit during connection detaches late connection without opening renderer",
   assert.equal(host.windows.length, 0)
   assert.equal(host.counts.releases, 1)
   assert.equal(host.counts.quits, 1)
+})
+
+test("opt-in timed benchmark quits through normal detach lifecycle", async () => {
+  const timers = []
+  const host = desktop({ argv: ["--benchmark-seconds", "5", "--db", "/temporary/tracker.sqlite3"], timers })
+  await flush()
+  assert.equal(host.windows.length, 1)
+  assert.equal(timers.length, 1)
+  assert.equal(timers[0].delay, 5000)
+  assert.deepEqual(host.profiles, [["userData", path.resolve("/temporary/benchmark-electron-profile")]])
+  timers[0].callback()
+  await flush()
+  assert.equal(host.counts.releases, 1)
+  assert.equal(host.counts.quits, 1)
+  assert.equal(timers[0].cleared, true)
+})
+
+test("invalid timed benchmark duration cannot connect or open a dashboard", async () => {
+  const host = desktop({ argv: ["--benchmark-seconds", "nan"], timers: [] })
+  await flush()
+  assert.equal(host.counts.connections, 0)
+  assert.equal(host.windows.length, 0)
+  assert.equal(host.errors.length, 1)
 })
