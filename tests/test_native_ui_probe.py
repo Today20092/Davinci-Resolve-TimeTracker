@@ -236,3 +236,52 @@ def test_dispatch_uses_a_native_signal_instead_of_an_arbitrary_event_name(tmp_pa
     host.actions = [lambda window: window.On["Dispatch"].Clicked({})]
     result = run_probe(None, host, host, report_path=tmp_path / "probe.json")
     assert len(result["dispatch_callbacks"]) == 10
+
+
+def test_opt_in_menu_worker_delivers_bounded_periodic_ticks_on_the_ui_thread(
+    tmp_path, monkeypatch
+):
+    class StepHost(Host):
+        def __init__(self):
+            super().__init__()
+            self.waits = []
+
+        def StepLoop(self, wait=False):
+            self.waits.append(wait)
+            if self.actions:
+                self.actions.pop(0)(self.windows[WINDOW_ID])
+            if self.events:
+                widget, name, event = self.events.pop(0)
+                getattr(widget.window.On[widget.name], name)(event)
+
+    clock = [0.0]
+    monkeypatch.setattr("scripts.native_ui_probe.time.monotonic", lambda: clock[0])
+    monkeypatch.setattr(
+        "scripts.native_ui_probe.time.sleep",
+        lambda seconds: clock.__setitem__(0, clock[0] + seconds),
+    )
+    host = StepHost()
+    host.actions = [lambda window: window.On["Dispatch"].Clicked({})]
+    result = run_probe(
+        None, host, host, report_path=tmp_path / "probe.json", menu_worker=True
+    )
+
+    assert [tick["elapsed_seconds"] for tick in result["periodic_callbacks"]] == [
+        5.0,
+        10.0,
+        15.0,
+    ]
+    assert len(result["dispatch_callbacks"]) == 10
+    assert set(host.waits) == {False}
+    assert host.loop_runs == 0
+    assert host.exited and not host.windows[WINDOW_ID].visible
+    assert result["stop_reason"] == "periodic_limit"
+    assert result["tracking_connected"] is False
+
+
+def test_menu_worker_fails_clearly_if_nonblocking_step_loop_is_unavailable(tmp_path):
+    host = Host()
+    with pytest.raises(RuntimeError, match="StepLoop"):
+        run_probe(
+            None, host, host, report_path=tmp_path / "probe.json", menu_worker=True
+        )

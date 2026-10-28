@@ -81,7 +81,8 @@ then choose **Workspace > Scripts > ResolveTimeTrackerNativeProbe**. The entry
 executes the probe using the menu's own `resolve`, `fusion` and `bmd` objects;
 it does not create an external scripting connection.
 
-The entry adds `menu_invocation_returned: true` to the probe's temporary report
+The entry opts into the bounded separate-worker experiment described below. It
+adds `menu_invocation_returned: true` to the probe's temporary report
 only after the entire `runpy` invocation returns. A report ending at
 `after_run_loop` without that marker is not proof of full menu return. A second
 activation that only focuses an existing window creates no report of its own.
@@ -121,6 +122,32 @@ same window and report without another probe directory or persistent controller.
 This establishes menu-context hide/reopen behavior for that trial, not periodic
 tracking or production history integration. Stop/full-invocation return and
 fresh-start behavior are separate remaining observations.
+
+### Bounded worker scheduling experiment
+
+Runtime inspection of the installed `bmd.UIDispatcher` Python binding exposed
+`StepLoop(self, wait=False)` and `Dispatch(self, ev)`. This is evidence from the
+shipped callable API, not a guessed timer method. The generated menu entry now
+passes an explicit worker opt-in. Only that mode drives nonblocking
+`StepLoop(wait=False)` on the menu worker's own thread, with standard-library
+monotonic timing and short sleeps between event-pump steps. The console launch
+keeps the original RunLoop path; do not opt a Resolve-process console into the
+sleeping worker loop.
+
+The worker automatically queues ten bounded native Button Clicked callbacks and
+records three no-op periodic ticks approximately five seconds apart. It then
+stops and returns after about fifteen seconds, unless Stop is clicked earlier.
+No periodic tick calls Resolve or records a Session. Missing StepLoop produces
+an explicit unsupported-host failure. The report distinguishes
+`periodic_scope: menu_worker_noop_only` and only marks
+`periodic_scheduler_verified` after all three ticks; this is not a claim that
+periodic SDK observations are safe during playback/rendering.
+
+The fake SDK/clock regression verifies nonblocking steps, exact worked-example
+tick times of 5, 10 and 15 seconds, bounded callback delivery and cleanup. The
+actual worker's cadence, UI responsiveness and full-invocation return still need
+the parent-controlled live trial. No new thread, native timer, dependency or
+production tracker was introduced.
 
 ## Live evidence checklist
 
