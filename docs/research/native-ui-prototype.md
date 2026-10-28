@@ -112,6 +112,33 @@ playback reproduction remains owned by the parent test session. Remove the old
 generated probe entry using its original checkout before installing this changed
 wrapper; ownership checks intentionally refuse to overwrite different contents.
 
+#### Instrumented live playback reproduction
+
+With the wrapper instrumentation from `8349007` on Windows 11 / Resolve Studio
+21.1.1.10, menu activation during looping playback created `fuscript.exe` PID
+31608 under Resolve PID 30836 at **2026-10-28 01:31:00.057695 UTC**. At
+01:31:22.0529 UTC, scanning all matching temporary probe directories found no
+bootstrap report for PID 31608, while Resolve still showed advancing playback at
+29.97 fps. After playback stopped, `resolve-native-probe-7_wwk4zo/bootstrap.json`
+recorded entry at Unix time 1793151090.43757 (01:31:30.43757 UTC), approximately
+30.38 seconds after worker creation. The probe reached `after_show` in 0.206338
+seconds from that instrumented entry.
+
+This narrows the observed wait to before the first instrumented Python stage;
+once that stage started, UI creation was fast. It does not distinguish host
+script startup from standard-library imports or temporary-file creation, nor
+prove that every later SDK read is safe during playback. The earlier uninstrumented
+delay therefore must not be attributed specifically to `fusion.UIManager`,
+`FindWindow`, or the dispatcher. The bounded worker's final read/exit results
+remain a separate check.
+
+Minimum recommendation: keep the existing tracking runtime and on-demand
+reporting. Do not expand the native utility into the production entry point on
+the assumption that Python can fix a delay before its instrumented entry. The
+next bounded experiment is to launch while stopped, then begin playback and
+compare event pumping with read-only SDK ticks; this separates menu startup from
+the running worker's responsiveness without changing billing or history.
+
 To remove this checkout's temporary menu entry after the experiment:
 
 ```text
