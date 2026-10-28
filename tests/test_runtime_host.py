@@ -32,6 +32,148 @@ class Provider:
 
 
 class RuntimeHostTest(unittest.TestCase):
+    def test_fresh_observation_after_failure_does_not_backfill_a_stale_gap(self):
+        now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        clock = [0.0]
+
+        class Recovering(Provider):
+            def snapshot(self):
+                if clock[0] == 15:
+                    raise RuntimeError("SDK unavailable")
+                if clock[0] == 40:
+                    return RuntimeSnapshot("Other project", "color", False, 0, True)
+                return super().snapshot()
+
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            SQLiteStore(Path(tmp) / "db") as store,
+            patch("time.monotonic", side_effect=lambda: clock[0]),
+        ):
+            engine = TrackingEngine(store, snapshot_provider=Recovering())
+            runtime = TrackingRuntime(
+                engine, now=lambda: now + timedelta(seconds=clock[0])
+            )
+            api = ApiState(store, tracking_engine=engine, tracking_runtime=runtime)
+            runtime.observe()
+            clock[0] = 10
+            runtime.observe()
+            clock[0] = 15
+            self.assertFalse(runtime.observe())
+            clock[0] = 40
+            self.assertTrue(runtime.observe())
+            self.assertEqual("2026-01-01T00:00:10Z", api.sessions()[0]["ended_at_utc"])
+
+    def test_pause_and_resume_discard_an_already_started_resolve_observation(self):
+        reads = [0]
+
+        class PausedDuringRead(Provider):
+            def snapshot(self):
+                reads[0] += 1
+                if reads[0] == 2:
+                    api.pause()
+                    api.resume()
+                    return RuntimeSnapshot("Old read", "color", False, 0, True)
+                return super().snapshot()
+
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            SQLiteStore(Path(tmp) / "db") as store,
+        ):
+            engine = TrackingEngine(store, snapshot_provider=PausedDuringRead())
+            runtime = TrackingRuntime(engine)
+            api = ApiState(store, tracking_engine=engine, tracking_runtime=runtime)
+            runtime.observe()
+            self.assertTrue(runtime.observe())
+            self.assertEqual("idle", api.status()["tracking_status"])
+            self.assertEqual("Project", api.status()["project"])
+            self.assertEqual(1, runtime.observation_count)
+            self.assertTrue(runtime.observe())
+            self.assertEqual("active", api.status()["tracking_status"])
+
+    def test_pause_after_observations_go_stale_recovers_at_the_last_heartbeat(self):
+        now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        clock = [0.0]
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            SQLiteStore(Path(tmp) / "db") as store,
+            patch("time.monotonic", side_effect=lambda: clock[0]),
+        ):
+            engine = TrackingEngine(store, snapshot_provider=Provider())
+            runtime = TrackingRuntime(
+                engine, now=lambda: now + timedelta(seconds=clock[0])
+            )
+            api = ApiState(
+                store,
+                tracking_engine=engine,
+                tracking_runtime=runtime,
+                now=lambda: now + timedelta(seconds=clock[0]),
+            )
+            runtime.observe()
+            clock[0] = 10
+            runtime.observe()
+            clock[0] = 60
+            self.assertEqual("paused", api.pause()["tracking_status"])
+            self.assertEqual("2026-01-01T00:00:10Z", api.sessions()[0]["ended_at_utc"])
+
+    def test_late_resolve_observation_does_not_bill_the_unobserved_interval(self):
+        now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        clock = [0.0]
+
+        class Slow(Provider):
+            def snapshot(self):
+                if clock[0] == 15:
+                    clock[0] = 60
+                    return RuntimeSnapshot("Other project", "color", False, 0, True)
+                return super().snapshot()
+
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            SQLiteStore(Path(tmp) / "db") as store,
+            patch("time.monotonic", side_effect=lambda: clock[0]),
+        ):
+            engine = TrackingEngine(store, snapshot_provider=Slow())
+            runtime = TrackingRuntime(
+                engine, now=lambda: now + timedelta(seconds=clock[0])
+            )
+            api = ApiState(store, tracking_engine=engine, tracking_runtime=runtime)
+            self.assertTrue(runtime.observe())
+            clock[0] = 10
+            self.assertTrue(runtime.observe())
+            clock[0] = 15
+            self.assertFalse(runtime.observe())
+            self.assertEqual("error", api.status()["tracking_status"])
+            session = api.sessions()[0]
+            self.assertEqual("Project", session["project_name"])
+            self.assertEqual("2026-01-01T00:00:10Z", session["ended_at_utc"])
+
+    def test_slow_failed_resolve_observation_recovers_at_the_last_heartbeat(self):
+        now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        clock = [0.0]
+
+        class SlowFailure(Provider):
+            def snapshot(self):
+                if clock[0] == 15:
+                    clock[0] = 60
+                    raise RuntimeError("SDK read failed after waiting")
+                return super().snapshot()
+
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            SQLiteStore(Path(tmp) / "db") as store,
+            patch("time.monotonic", side_effect=lambda: clock[0]),
+        ):
+            engine = TrackingEngine(store, snapshot_provider=SlowFailure())
+            runtime = TrackingRuntime(
+                engine, now=lambda: now + timedelta(seconds=clock[0])
+            )
+            api = ApiState(store, tracking_engine=engine, tracking_runtime=runtime)
+            runtime.observe()
+            clock[0] = 10
+            runtime.observe()
+            clock[0] = 15
+            self.assertFalse(runtime.observe())
+            self.assertEqual("2026-01-01T00:00:10Z", api.sessions()[0]["ended_at_utc"])
+
     def test_resume_race_never_reads_resolve_inside_the_database_lock(self):
         with (
             tempfile.TemporaryDirectory() as tmp,

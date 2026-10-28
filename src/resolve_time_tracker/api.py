@@ -27,11 +27,13 @@ from resolve_time_tracker.report_projection import (
     project_report,
 )
 from resolve_time_tracker.tracking_engine import TrackingEngine
-from resolve_time_tracker.tracking_runtime import TrackingRuntime
+from resolve_time_tracker.tracking_runtime import (
+    STALE_HEARTBEAT_SECONDS,
+    TrackingRuntime,
+)
 
 
 Now = Callable[[], datetime]
-STALE_HEARTBEAT_SECONDS = 15
 
 
 class SettingsUpdate(BaseModel):
@@ -260,7 +262,14 @@ class ApiState:
         if active is not None:
             started = _parse_utc(active["started_at_utc"])
             heartbeat = active["last_heartbeat_at_utc"]
-            elapsed = max(0, int((self.now() - started).total_seconds()))
+            now = self.now()
+            stale = (
+                heartbeat
+                and (now - _parse_utc(heartbeat)).total_seconds()
+                > STALE_HEARTBEAT_SECONDS
+            )
+            end = _parse_utc(heartbeat) if stale else now
+            elapsed = max(0, int((end - started).total_seconds()))
             status.update(
                 {
                     "project": active["project_name"],
@@ -272,11 +281,7 @@ class ApiState:
                     "tracking_status": "active",
                 }
             )
-            if (
-                heartbeat
-                and (self.now() - _parse_utc(heartbeat)).total_seconds()
-                > STALE_HEARTBEAT_SECONDS
-            ):
+            if stale:
                 status["tracking_status"] = "stale"
         elif snapshot is not None:
             status["project"] = snapshot.project_name or "none"
