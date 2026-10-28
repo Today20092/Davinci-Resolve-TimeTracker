@@ -238,8 +238,9 @@ def test_dispatch_uses_a_native_signal_instead_of_an_arbitrary_event_name(tmp_pa
     assert len(result["dispatch_callbacks"]) == 10
 
 
+@pytest.mark.parametrize("resolve_available", [True, False])
 def test_opt_in_menu_worker_delivers_bounded_periodic_ticks_on_the_ui_thread(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, resolve_available
 ):
     class StepHost(Host):
         def __init__(self):
@@ -262,8 +263,21 @@ def test_opt_in_menu_worker_delivers_bounded_periodic_ticks_on_the_ui_thread(
     )
     host = StepHost()
     host.actions = [lambda window: window.On["Dispatch"].Clicked({})]
+    project = SimpleNamespace(
+        GetName=lambda: "private test project", IsRenderingInProgress=lambda: False
+    )
+    resolve = (
+        SimpleNamespace(
+            GetProjectManager=lambda: SimpleNamespace(
+                GetCurrentProject=lambda: project
+            ),
+            GetCurrentPage=lambda: "edit",
+        )
+        if resolve_available
+        else None
+    )
     result = run_probe(
-        None, host, host, report_path=tmp_path / "probe.json", menu_worker=True
+        resolve, host, host, report_path=tmp_path / "probe.json", menu_worker=True
     )
 
     assert [tick["elapsed_seconds"] for tick in result["periodic_callbacks"]] == [
@@ -277,6 +291,23 @@ def test_opt_in_menu_worker_delivers_bounded_periodic_ticks_on_the_ui_thread(
     assert host.exited and not host.windows[WINDOW_ID].visible
     assert result["stop_reason"] == "periodic_limit"
     assert result["tracking_connected"] is False
+    assert result["periodic_scope"] == "menu_worker_readonly_resolve"
+    assert [
+        tick["resolve_read"]["available"] for tick in result["periodic_callbacks"]
+    ] == [resolve_available] * 3
+    assert all(
+        tick["resolve_read"]["duration_seconds"] >= 0
+        for tick in result["periodic_callbacks"]
+    )
+    if resolve_available:
+        assert [
+            tick["resolve_read"]["page"] for tick in result["periodic_callbacks"]
+        ] == ["edit"] * 3
+    else:
+        assert [
+            tick["resolve_read"]["error_type"] for tick in result["periodic_callbacks"]
+        ] == ["AttributeError"] * 3
+    assert "private test project" not in (tmp_path / "probe.json").read_text()
 
 
 def test_menu_worker_fails_clearly_if_nonblocking_step_loop_is_unavailable(tmp_path):

@@ -24,7 +24,8 @@ directory. The window displays the report path.
 - An explicit button queues ten bounded no-op callbacks and records callback
   latency. These callbacks are **not a periodic scheduler**. No UI calls are made
   from a background Python thread and no timer API is guessed.
-- Another explicit button reads project/Page/rendering state once. It displays the
+- An explicit button reads project/Page/rendering state once. The opt-in menu
+  worker also performs that read on each of its three bounded periodic ticks. It displays the
   project name locally but omits it from the JSON report. Read failures are
   explicit; no observation creates a billable Session.
 
@@ -108,8 +109,9 @@ trial; this correction does not establish a periodic timer.
 
 Context7's Fusion Script Docs reference describes `UITimer.Start`, `Stop` and
 `Interval`, but the fetched material does not establish how to create/register
-one in this host or a supported timeout-handler API. The menu experiment does
-not claim a periodic scheduler or guess those calls.
+one in this host or a supported timeout-handler API. Those timer calls remain
+unverified; the worker experiment below uses the actually exported StepLoop API
+instead.
 
 ### First dedicated-menu observations
 
@@ -120,8 +122,8 @@ process. Its Python version was 3.13.14. The report was written to a new tempora
 while that worker remained alive. Activating the same menu entry restored the
 same window and report without another probe directory or persistent controller.
 This establishes menu-context hide/reopen behavior for that trial, not periodic
-tracking or production history integration. Stop/full-invocation return and
-fresh-start behavior are separate remaining observations.
+tracking or production history integration. The parent subsequently observed
+`menu_invocation_returned: true` after Stop and confirmed that worker PID exited.
 
 ### Bounded worker scheduling experiment
 
@@ -135,19 +137,28 @@ keeps the original RunLoop path; do not opt a Resolve-process console into the
 sleeping worker loop.
 
 The worker automatically queues ten bounded native Button Clicked callbacks and
-records three no-op periodic ticks approximately five seconds apart. It then
-stops and returns after about fifteen seconds, unless Stop is clicked earlier.
-No periodic tick calls Resolve or records a Session. Missing StepLoop produces
-an explicit unsupported-host failure. The report distinguishes
-`periodic_scope: menu_worker_noop_only` and only marks
-`periodic_scheduler_verified` after all three ticks; this is not a claim that
-periodic SDK observations are safe during playback/rendering.
+records three periodic ticks, waiting five seconds after each tick's work. It then
+stops and returns after about fifteen seconds plus read latency, unless Stop is
+clicked earlier. Missing StepLoop produces an explicit unsupported-host failure.
+No tick records a Session. The report only marks `periodic_scheduler_verified`
+after all three ticks; this alone is not a claim of production tracking safety.
 
 The fake SDK/clock regression verifies nonblocking steps, exact worked-example
 tick times of 5, 10 and 15 seconds, bounded callback delivery and cleanup. The
-actual worker's cadence, UI responsiveness and full-invocation return still need
-the parent-controlled live trial. No new thread, native timer, dependency or
-production tracker was introduced.
+actual worker's cadence and full-invocation return were then tested by the parent.
+The no-op trial report recorded a separate `fuscript.exe` worker, ten queued and
+ten delivered callbacks with approximately 0.024–0.058 second latency, and ticks
+at 5.000858, 10.001676 and 15.002405 seconds. It recorded `after_worker_loop`,
+`periodic_limit` and `menu_invocation_returned: true`; the worker then exited.
+That report's scope is `menu_worker_noop_only`, not a Resolve-observation test.
+
+The next code slice reuses the existing read-only project/Page/render callback
+on each tick and records its availability, state and latency inside that tick.
+The scope is now `menu_worker_readonly_resolve`; errors include only exception
+type and elapsed time, never private project names or error text. A fake SDK
+success/failure regression covers these records, but live playback/rendering
+evidence for this slice is still pending. No new thread, native timer,
+dependency, billing engine or production tracker was introduced.
 
 ## Live evidence checklist
 

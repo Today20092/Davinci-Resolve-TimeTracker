@@ -47,7 +47,9 @@ def run_probe(resolve, fusion, bmd, *, report_path=None, menu_worker=False):
         "ctypes_available": capabilities["ctypes"],
         "tracking_connected": False,
         "periodic_scheduler_verified": False,
-        "periodic_scope": "menu_worker_noop_only" if menu_worker else "not_tested",
+        "periodic_scope": "menu_worker_readonly_resolve"
+        if menu_worker
+        else "not_tested",
         "periodic_callbacks": [],
         "report_path": str(report_path),
         "hidden_count": 0,
@@ -187,6 +189,7 @@ def run_probe(resolve, fusion, bmd, *, report_path=None, menu_worker=False):
             report["resolve_read"] = {
                 "available": False,
                 "error_type": type(error).__name__,
+                "duration_seconds": time.monotonic() - started_at,
             }
             window.Find(
                 "Status"
@@ -216,11 +219,15 @@ def run_probe(resolve, fusion, bmd, *, report_path=None, menu_worker=False):
                 break
             now = time.monotonic()
             if now >= next_tick:
+                read_resolve(None)
                 report["periodic_callbacks"].append(
-                    {"elapsed_seconds": now - started_at}
+                    {
+                        "elapsed_seconds": now - started_at,
+                        "resolve_read": report["resolve_read"],
+                    }
                 )
                 report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
-                next_tick = now + 5.0
+                next_tick = time.monotonic() + 5.0
             time.sleep(max(0.0, min(0.05, next_tick - time.monotonic())))
         if not report["stopped"]:
             report["periodic_scheduler_verified"] = True
