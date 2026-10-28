@@ -69,9 +69,11 @@ class RuntimeHost:
                     self._release_process(pid)
                     raise LaunchError("DaVinci Resolve closed before tracking started.")
                 if self.bridge_factory is None:
-                    from resolve_time_tracker.resolve_bridge import ResolveBridge
+                    from resolve_time_tracker.isolated_resolve_bridge import (
+                        IsolatedResolveBridge,
+                    )
 
-                    self.bridge_factory = ResolveBridge
+                    self.bridge_factory = IsolatedResolveBridge
                 self.resolve_pid = pid
                 try:
                     self.bridge = self.bridge_factory()

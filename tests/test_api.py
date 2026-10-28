@@ -413,7 +413,9 @@ class ApiTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with (
                 patch("resolve_time_tracker.api.TrackingEngine") as engine,
-                patch("resolve_time_tracker.resolve_bridge.ResolveBridge") as bridge,
+                patch(
+                    "resolve_time_tracker.isolated_resolve_bridge.IsolatedResolveBridge"
+                ) as bridge,
                 patch("uvicorn.run") as run,
             ):
                 run_api(Path(tmp) / "tracker.sqlite3")
@@ -422,6 +424,7 @@ class ApiTest(unittest.TestCase):
         self.assertIs(app.state.api.tracking_engine, engine.return_value)
         engine.assert_called_once()
         bridge.assert_called_once()
+        bridge.return_value.close.assert_called_once()
 
     def test_run_api_can_start_database_api_without_resolve_bridge(self):
         with tempfile.TemporaryDirectory() as tmp:

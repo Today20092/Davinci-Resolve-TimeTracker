@@ -32,6 +32,46 @@ class Provider:
 
 
 class RuntimeHostTest(unittest.TestCase):
+    def test_new_session_freshness_uses_its_own_start_until_first_heartbeat(self):
+        for second, expected_status, elapsed, ended in (
+            (26, "active", 11, "2026-01-01T00:00:26Z"),
+            (31, "stale", 0, "2026-01-01T00:00:15Z"),
+        ):
+            now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+            clock = [0.0]
+
+            class PageChange(Provider):
+                def snapshot(self):
+                    return RuntimeSnapshot(
+                        "Project", "edit" if clock[0] < 15 else "color", False, 0, True
+                    )
+
+            with (
+                self.subTest(second=second),
+                tempfile.TemporaryDirectory() as tmp,
+                SQLiteStore(Path(tmp) / "db") as store,
+                patch("time.monotonic", side_effect=lambda: clock[0]),
+            ):
+                engine = TrackingEngine(store, snapshot_provider=PageChange())
+                runtime = TrackingRuntime(
+                    engine, now=lambda: now + timedelta(seconds=clock[0])
+                )
+                api = ApiState(
+                    store,
+                    tracking_engine=engine,
+                    tracking_runtime=runtime,
+                    now=lambda: now + timedelta(seconds=clock[0]),
+                )
+                for observed in (0, 10, 15):
+                    clock[0] = observed
+                    runtime.observe()
+                clock[0] = second
+                self.assertEqual(expected_status, api.status()["tracking_status"])
+                self.assertEqual(elapsed, api.status()["active_elapsed_seconds"])
+                api.pause()
+                color = next(s for s in api.sessions() if s["page"] == "color")
+                self.assertEqual(ended, color["ended_at_utc"])
+
     def test_fresh_observation_after_failure_does_not_backfill_a_stale_gap(self):
         now = datetime(2026, 1, 1, tzinfo=timezone.utc)
         clock = [0.0]
