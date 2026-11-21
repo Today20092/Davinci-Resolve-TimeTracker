@@ -1,0 +1,39 @@
+# One monthly PR per ecosystem for all minor and patch updates (one CI run, no
+# lockfile conflicts between PRs); majors come one PR each. The 7-day cooldown
+# skips fresh releases; security updates are not delayed.
+# .github/workflows/dependabot-auto-merge.yml merges minor and patch PRs once
+# the required checks pass. Majors wait for a person.
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      minor-and-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      minor-and-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      minor-and-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]

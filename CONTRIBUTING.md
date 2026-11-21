@@ -12,7 +12,7 @@ Run the Python and frontend checks in the [Development Guide](docs/development.m
 
 ## Git and Releases
 
-Use [development for integration and main for reviewed release source](docs/branch-workflow.md). Follow the [release policy](docs/releasing.md) for compatibility, version selection, and release preparation.
+Send each change as its own pull request to `main` ([Git workflow](docs/branch-workflow.md)). Follow the [release policy](docs/releasing.md) for compatibility, version selection, and release preparation.
 
 ## Development Notes
 
