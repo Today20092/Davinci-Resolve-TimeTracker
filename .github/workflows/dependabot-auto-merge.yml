@@ -1,0 +1,32 @@
+name: Dependabot auto-merge
+
+# Queues minor and patch Dependabot PRs for auto-merge; GitHub merges them once
+# the required checks pass. Majors wait for a person. update-type is the highest
+# change in the PR, so a group containing a major is skipped.
+# A merge made with GITHUB_TOKEN creates no push event; nothing here deploys
+# from a push to the default branch, so no follow-up run is needed.
+
+on: pull_request
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  merge:
+    # Only Dependabot's own PRs, and only when Dependabot made the latest push.
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - id: meta
+        uses: dependabot/fetch-metadata@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Queue auto-merge
+        if: steps.meta.outputs.update-type == 'version-update:semver-minor' || steps.meta.outputs.update-type == 'version-update:semver-patch'
+        run: gh pr merge --auto --merge "$PR"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}

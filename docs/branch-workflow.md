@@ -1,25 +1,32 @@
-# Git Workflow
+# Git workflow
 
-## Branches and Integration
+`main` is the only long-lived branch. Each task gets its own branch and pull request into `main`; there is no integration branch and no stacked PRs.
 
-`development` is the everyday working and integration branch. `main` is the reviewed release-source branch and remains the preferred remote default. External contributions target `development`.
+## Work on a task
 
-For sequential work, work directly on `development` and commit useful checkpoints. For parallel work, use scoped `codex/<scope>` branches or worktrees from current `development`; merge completed changes back into `development`. Run the [complete checks](development.md#run-checks) on the combined source. Source merges do not update installed or built applications.
+1. Work in a worktree the host manages, based on current `origin/main`. A T3 Code thread on the main checkout moves itself with `t3_worktree_handoff` before editing; the project's worktree script runs `uv sync --dev` and `pnpm --dir frontend install --frozen-lockfile`. Without host worktree tools, use `git worktree add` and run `uv sync --dev` and `pnpm --dir frontend install --frozen-lockfile`.
+2. Commit work in progress instead of using `git stash`: stashes are shared by every worktree.
+3. Make the change and run the [complete checks](development.md#run-checks). Source merges do not update installed or built applications.
+4. End every code task with a commit and a pull request to `main`, without being asked. Opening a PR is safe; only a merge changes `main`; nothing deploys.
+5. CI runs on the PR (Ubuntu and Windows). Watch it and fix failures until it passes. To merge without waiting, queue it with `gh pr merge --auto --merge`; GitHub merges once the required checks pass.
+6. Merge only when the user asks, with a merge commit.
 
-Fetch remote state before synchronization. Use `git pull --ff-only` when the branch can advance without divergence; inspect and deliberately merge divergent histories while preserving local work. Push development checkpoints as backups when authorized.
+Fetch before choosing a base. Use `git pull --ff-only` to advance a local `main`; inspect divergent histories and merge deliberately. Never force-push `main`.
 
-## Promotion
+## What runs where
 
-Promote a tested batch through a `development` to `main` PR using a merge commit to preserve ancestry. Record the source revision and check results in the PR. Bring main-only fixes and release metadata back into `development` through a merge before the next batch. GitHub merge settings and branch protections must be verified before promotion; this policy does not establish that they are configured.
+| Event | Effect |
+| --- | --- |
+| Pull request, push to `main`, any tag | [CI](../.github/workflows/ci.yml): Python format, lint and pytest; frontend tests, lint and build, on Windows and Ubuntu |
+| `v*` tag | [Release automation](../.github/workflows/release.yml) creates draft notes |
+| Monthly | [Dependabot](../.github/dependabot.yml) opens one grouped minor-and-patch PR per ecosystem; majors one PR each. [Auto-merge](../.github/workflows/dependabot-auto-merge.yml) queues minor and patch PRs; majors wait for a person |
 
-Follow the [release policy](releasing.md) for versions and publication. A source promotion and a published release are separate actions.
+Follow the [release policy](releasing.md) for versions and publication. A merge and a published release are separate actions.
 
-## Automation
+## Repository controls
 
-[CI](../.github/workflows/ci.yml) runs on pushes to `main` and `development`, all tag pushes, and pull requests. It checks Python formatting, lint, and pytest plus frontend tests, lint, and build on Windows and Ubuntu. [Release automation](../.github/workflows/release.yml) creates draft notes for `v*` tags. Neither workflow currently builds downloadable installers.
+`main` requires a pull request, both `test` checks and resolved conversations; rules apply to administrators, and force pushes and deletion are blocked. It does not require branches to be up to date, since nothing deploys from `main`. Auto-merge is allowed and merged branches are deleted automatically. The `development` branch is retired.
 
-## Migration and Cleanup
+## Cleanup
 
-The local `development` branch starts at `692e0cb`, the integrated work from `codex/implement-native-spec` in the “Review open GitHub issues” thread. Existing branches and worktrees are retained. Remote branch publication, protection changes, and promotion require their own authorized operations.
-
-Retire temporary worktrees and branches only after their needed commits are integrated and uncommitted files, ignored artifacts, and test evidence are preserved. Keep active work and the long-lived `development` and `main` branches.
+GitHub deletes a merged PR's branch. Remove the task's worktree through the host (or `git worktree remove`) once it has no uncommitted or unmerged work.

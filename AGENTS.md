@@ -8,7 +8,7 @@ For setup, repository structure, running the app, testing, linting, or builds, r
 
 Before running live tracking or replacing runtime code, read [runtime and data safety](docs/development.md#runtime-and-data-safety) for test databases, private runtime tokens, and process shutdown.
 
-For branch setup, integration, promotion, or cleanup, read the [Git workflow](docs/branch-workflow.md). For version selection, release-status wording, or release preparation, read the [release policy](docs/releasing.md).
+For branches, worktrees, pull requests or merging, read the [Git workflow](docs/branch-workflow.md). For version selection, release-status wording, or release preparation, read the [release policy](docs/releasing.md).
 
 ## Agent skills
 
